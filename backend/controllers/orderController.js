@@ -3,14 +3,47 @@ const Order = require("../models/Order");
 const QRCode = require("qrcode");
 
 exports.createOrder = async (req, res) => {
-  const { products, scheduledDate, scheduledTime, orderType } = req.body;
+  const {
+    products,
+    items,
+    scheduledDate,
+    scheduledTime,
+    orderType,
+    paymentMethod,
+    notes,
+    address,
+    total,
+  } = req.body;
+
   try {
+    // Handle both 'products' and 'items' field names for compatibility
+    const orderItems = items || products;
+
+    if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Order items are required",
+      });
+    }
+
+    // Calculate total if not provided
+    let orderTotal = total;
+    if (!orderTotal) {
+      orderTotal = orderItems.reduce((sum, item) => {
+        return sum + item.price * item.quantity;
+      }, 0);
+    }
+
     const order = new Order({
       customer: req.user.id,
-      products,
+      products: orderItems,
+      total: orderTotal,
       scheduledDate,
       scheduledTime,
-      orderType,
+      orderType: orderType || "pickup",
+      paymentMethod: paymentMethod || "cash",
+      notes,
+      address,
     });
 
     // Generate QR Code
@@ -18,9 +51,19 @@ exports.createOrder = async (req, res) => {
     order.qrCode = await QRCode.toDataURL(qrData);
 
     await order.save();
-    res.status(201).json({ message: "Order placed successfully", order });
+
+    res.status(201).json({
+      success: true,
+      message: "Order placed successfully",
+      order,
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Error creating order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
 
