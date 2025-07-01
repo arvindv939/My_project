@@ -1,40 +1,42 @@
 const express = require("express");
-const Product = require("../models/Product");
+const router = express.Router();
+const productController = require("../controllers/productController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const roleMiddleware = require("../middlewares/roleMiddleware");
-const productController = require("../controllers/productController");
 
-const router = express.Router();
-
-// Public routes
+// Public routes (no authentication required)
 router.get("/", productController.getProducts);
 router.get("/search", productController.searchProducts);
 router.get("/category/:category", productController.getProductsByCategory);
-router.get("/:id", productController.getProductById);
 
-// Protected routes - Shop Owner only
+// Protected routes (authentication required)
 router.get(
   "/my-products",
   authMiddleware,
-  roleMiddleware(["shop_owner"]),
+  roleMiddleware(["shop_owner", "ShopOwner"]),
   productController.getMyProducts
 );
+
+// Product CRUD operations (shop owner only)
 router.post(
   "/",
   authMiddleware,
-  roleMiddleware(["shop_owner"]),
+  roleMiddleware(["shop_owner", "ShopOwner"]),
   productController.createProduct
 );
+
+// Single product routes - MUST come after specific routes
+router.get("/:id", productController.getProductById);
 router.put(
   "/:id",
   authMiddleware,
-  roleMiddleware(["shop_owner"]),
+  roleMiddleware(["shop_owner", "ShopOwner"]),
   productController.updateProduct
 );
 router.delete(
   "/:id",
   authMiddleware,
-  roleMiddleware(["shop_owner"]),
+  roleMiddleware(["shop_owner", "ShopOwner"]),
   productController.deleteProduct
 );
 
