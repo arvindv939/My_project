@@ -1,0 +1,6 @@
+greenmart2/ 
+node_modules/ 
+.expo/ 
+.vscode/ 
+.env 
+dist/ 
