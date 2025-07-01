@@ -22,12 +22,16 @@ import {
 } from '@/services/productService';
 
 const categories = [
-  { id: 'fruits', name: 'Fresh Fruits', icon: '🍎', color: '#EF4444' },
-  { id: 'vegetables', name: 'Vegetables', icon: '🥬', color: '#10B981' },
-  { id: 'dairy', name: 'Dairy & Eggs', icon: '🥛', color: '#3B82F6' },
-  { id: 'grains', name: 'Grains & Cereals', icon: '🌾', color: '#F59E0B' },
-  { id: 'organic', name: 'Organic', icon: '🌱', color: '#16A34A' },
-  { id: 'beverages', name: 'Beverages', icon: '🧃', color: '#8B5CF6' },
+  { id: 'Fruits', name: 'Fresh Fruits', icon: '🍎', color: '#EF4444' },
+  { id: 'Vegetables', name: 'Vegetables', icon: '🥬', color: '#10B981' },
+  { id: 'Dairy', name: 'Dairy & Eggs', icon: '🥛', color: '#3B82F6' },
+  { id: 'Bakery', name: 'Bakery', icon: '🍞', color: '#F59E0B' },
+  { id: 'Snacks', name: 'Snacks', icon: '🍿', color: '#16A34A' },
+  { id: 'Beverages', name: 'Beverages', icon: '🧃', color: '#8B5CF6' },
+  { id: 'Staples', name: 'Staples', icon: '🌾', color: '#F59E0B' },
+  { id: 'Household', name: 'Household', icon: '🧽', color: '#6B7280' },
+  { id: 'Personal Care', name: 'Personal Care', icon: '🧴', color: '#EC4899' },
+  { id: 'Others', name: 'Others', icon: '📦', color: '#64748B' },
 ];
 
 export default function CategoriesScreen() {
@@ -51,12 +55,18 @@ export default function CategoriesScreen() {
         search: searchQuery || undefined,
       };
 
+      console.log(
+        'Categories: Fetching products with filters:',
+        productFilters
+      );
+
       const fetchedProducts = await productService.getAllProducts(
         productFilters
       );
+      console.log('Categories: Fetched products:', fetchedProducts.length);
       setProducts(fetchedProducts);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Categories: Error fetching products:', error);
     } finally {
       setLoading(false);
     }

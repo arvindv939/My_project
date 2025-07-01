@@ -1,163 +1,117 @@
-import API from "@/utils/api"
+import API from '@/utils/api';
+import type { Product } from '@/types';
 
 export interface OrderItem {
-  product: string
-  quantity: number
-  price: number
+  product: string;
+  quantity: number;
+  price: number;
 }
 
-export interface CreateOrderData {
-  products: OrderItem[]
-  scheduledDate?: string
-  scheduledTime?: string
-  orderType: "delivery" | "pickup"
-  paymentMethod: "cash" | "card" | "upi"
-  address?: string
-  notes?: string
+export interface CreateOrderRequest {
+  items: OrderItem[];
+  totalAmount: number;
+  deliveryAddress: string;
+  paymentMethod: string;
+  notes?: string;
 }
 
 export interface Order {
-  _id: string
-  customer: string
-  products: OrderItem[]
-  total: number
-  status: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled"
-  orderDate: string
-  scheduledDate?: string
-  scheduledTime?: string
-  orderType: "delivery" | "pickup"
-  paymentMethod: string
-  address?: string
-  notes?: string
-  qrCode?: string
-  pickupToken?: string
-  estimatedTime?: number
-  createdAt: string
-  updatedAt: string
-  totalAmount: number
-  items: Array<{
-    name: string
-    quantity: number
-    price: number
-  }>
-  deliveryAddress?: string
+  _id: string;
+  customer: string;
+  items: OrderItem[];
+  totalAmount: number;
+  status: string;
+  deliveryAddress: string;
+  paymentMethod: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 class OrderService {
-  async createOrder(orderData: CreateOrderData): Promise<Order> {
+  async createOrder(
+    cartItems: Product[],
+    deliveryAddress: string,
+    paymentMethod = 'cash'
+  ): Promise<Order> {
     try {
-      console.log("OrderService: Creating order with data:", orderData)
+      console.log('OrderService: Creating order with cart items:', cartItems);
 
-      // Calculate total amount
-      const totalAmount = orderData.products.reduce((total, item) => {
-        return total + item.price * item.quantity
-      }, 0)
-
-      // Transform data to match backend expectations
-      const backendOrderData = {
-        products: orderData.products,
-        total: totalAmount,
-        orderType: orderData.orderType,
-        paymentMethod: orderData.paymentMethod,
-        notes: orderData.notes,
-        address: orderData.address,
-        scheduledDate: orderData.scheduledDate,
-        scheduledTime: orderData.scheduledTime,
+      if (!cartItems || cartItems.length === 0) {
+        throw new Error('Cart is empty');
       }
 
-      console.log("OrderService: Sending to backend:", backendOrderData)
+      // Transform cart items to order items format
+      const items: OrderItem[] = cartItems.map((item) => ({
+        product: item.id,
+        quantity: item.quantity || 1,
+        price: item.price,
+      }));
 
-      const response = await API.post("/orders", backendOrderData)
+      const totalAmount = cartItems.reduce(
+        (total, item) => total + item.price * (item.quantity || 1),
+        0
+      );
 
-      console.log("OrderService: Backend response:", response.data)
+      const orderData: CreateOrderRequest = {
+        items,
+        totalAmount,
+        deliveryAddress,
+        paymentMethod,
+      };
 
-      if (response.data && response.data.order) {
-        return response.data.order
-      } else if (response.data) {
-        return response.data
-      } else {
-        throw new Error("Invalid response format from server")
-      }
+      console.log('OrderService: Sending order data:', orderData);
+
+      const response = await API.post('/orders', orderData);
+
+      console.log('OrderService: Order created successfully:', response.data);
+
+      return response.data.order || response.data;
     } catch (error: any) {
-      console.error("OrderService: Error creating order:", error)
+      console.error('OrderService: Error creating order:', error);
 
       if (error.response) {
-        console.error("OrderService: Error response:", error.response.data)
-        console.error("OrderService: Error status:", error.response.status)
-
-        const errorMessage =
-          error.response.data?.message || error.response.data?.error || `Server error: ${error.response.status}`
-        throw new Error(errorMessage)
-      } else if (error.request) {
-        console.error("OrderService: No response received:", error.request)
-        throw new Error("Network error: Unable to connect to server")
-      } else {
-        console.error("OrderService: Request setup error:", error.message)
-        throw new Error(error.message || "Failed to create order")
-      }
-    }
-  }
-
-  async getMyOrders(): Promise<Order[]> {
-    try {
-      console.log("OrderService: Fetching user orders")
-      const response = await API.get("/orders/my-orders")
-      console.log("OrderService: Orders response:", response.data)
-      return response.data.orders || response.data || []
-    } catch (error: any) {
-      console.error("OrderService: Error fetching orders:", error)
-
-      if (error.response?.status === 404) {
-        return [] // No orders found
+        console.error('OrderService: Error response:', error.response.data);
+        console.error('OrderService: Error status:', error.response.status);
       }
 
-      throw error
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+
+      throw error;
     }
   }
 
-  async getUserOrders(): Promise<Order[]> {
-    return this.getMyOrders()
-  }
-
-  async getOrderById(orderId: string): Promise<Order> {
+  async getOrders(): Promise<Order[]> {
     try {
-      const response = await API.get(`/orders/${orderId}`)
-      return response.data.order || response.data
+      const response = await API.get('/orders');
+      return response.data.orders || response.data || [];
     } catch (error) {
-      console.error("OrderService: Error fetching order:", error)
-      throw error
+      console.error('OrderService: Error fetching orders:', error);
+      throw error;
     }
   }
 
-  async updateOrderStatus(orderId: string, status: string): Promise<Order> {
+  async getOrderById(id: string): Promise<Order> {
     try {
-      const response = await API.put(`/orders/${orderId}/status`, { status })
-      return response.data.order || response.data
+      const response = await API.get(`/orders/${id}`);
+      return response.data.order || response.data;
     } catch (error) {
-      console.error("OrderService: Error updating order status:", error)
-      throw error
+      console.error('OrderService: Error fetching order:', error);
+      throw error;
     }
   }
 
-  async cancelOrder(orderId: string): Promise<Order> {
+  async updateOrderStatus(id: string, status: string): Promise<Order> {
     try {
-      const response = await API.put(`/orders/${orderId}/cancel`)
-      return response.data.order || response.data
+      const response = await API.put(`/orders/${id}/status`, { status });
+      return response.data.order || response.data;
     } catch (error) {
-      console.error("OrderService: Error cancelling order:", error)
-      throw error
-    }
-  }
-
-  async trackOrder(orderId: string): Promise<Order> {
-    try {
-      const response = await API.get(`/orders/${orderId}/track`)
-      return response.data.order || response.data
-    } catch (error) {
-      console.error("OrderService: Error tracking order:", error)
-      throw error
+      console.error('OrderService: Error updating order status:', error);
+      throw error;
     }
   }
 }
 
-export const orderService = new OrderService()
+export const orderService = new OrderService();

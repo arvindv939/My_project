@@ -1,275 +1,368 @@
-"use client"
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import { ShoppingBag, Leaf, CreditCard, Truck } from "lucide-react-native"
-import { CartItem } from "@/components/CartItem"
-import { useCart } from "@/contexts/CartContext"
-import { useAuth } from "@/contexts/AuthContext"
-import { orderService } from "@/services/orderService"
-import { formatIndianCurrency } from "@/utils/currency"
+'use client';
+
+import { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  TextInput,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MapPin, CreditCard, Truck } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useCart } from '@/contexts/CartContext';
+import { CartItem } from '@/components/CartItem';
+import { formatIndianCurrency } from '@/utils/currency';
+import { orderService } from '@/services/orderService';
 
 export default function CartScreen() {
-  const { items, getTotalPrice, clearCart } = useCart()
-  const { user } = useAuth()
-  const totalPrice = getTotalPrice()
-  const deliveryFee = totalPrice > 500 ? 0 : 40
-  const finalTotal = totalPrice + deliveryFee
+  const { items, getTotalPrice, clearCart } = useCart();
+  const [loading, setLoading] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState(
+    '123 Main Street, City, State 12345'
+  );
+
+  const totalPrice = getTotalPrice();
+  const deliveryFee = totalPrice > 500 ? 0 : 40;
+  const finalTotal = totalPrice + deliveryFee;
 
   const handleCheckout = async () => {
-    if (items.length === 0) {
-      Alert.alert("Empty Cart", "Please add items to your cart before checkout.")
-      return
-    }
-
-    if (!user) {
-      Alert.alert("Authentication Required", "Please login to place an order.")
-      return
-    }
-
     try {
-      // Prepare order data
-      const orderData = {
-        products: items.map((item) => ({
-          product: item.id,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-        orderType: "pickup" as const,
-        paymentMethod: "cash" as const,
-        notes: "Order placed from mobile app",
+      if (items.length === 0) {
+        Alert.alert(
+          'Empty Cart',
+          'Please add items to your cart before checkout.'
+        );
+        return;
       }
 
-      console.log("Placing order with data:", orderData)
+      if (!deliveryAddress.trim()) {
+        Alert.alert('Address Required', 'Please enter a delivery address.');
+        return;
+      }
 
-      // Create the order
-      const order = await orderService.createOrder(orderData)
+      setLoading(true);
 
-      console.log("Order created successfully:", order)
+      console.log('Cart: Starting checkout with items:', items);
 
-      // Clear cart and show success
-      clearCart()
+      // Transform cart items to the format expected by orderService
+      const orderItems = items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        image: item.image,
+        category: item.category,
+        description: item.description,
+        isOrganic: item.isOrganic,
+        ecoFriendly: item.ecoFriendly,
+        inStock: item.inStock,
+        rating: item.rating,
+        unit: item.unit,
+      }));
+
+      const order = await orderService.createOrder(
+        orderItems,
+        deliveryAddress.trim(),
+        'cash'
+      );
+
+      console.log('Cart: Order created successfully:', order);
 
       Alert.alert(
-        "Order Placed Successfully!",
-        `Your order #${order._id.slice(-6)} has been placed. You will receive a pickup notification shortly.`,
+        'Order Placed!',
+        'Your order has been placed successfully. You will receive a confirmation shortly.',
         [
           {
-            text: "OK",
+            text: 'OK',
             onPress: () => {
-              // Navigate to orders screen or show order details
-              console.log("Order placed, navigating to orders...")
+              clearCart();
+              // Navigate to orders screen or home
             },
           },
-        ],
-      )
-    } catch (error) {
-      console.error("Error placing order:", error)
-
-      let errorMessage = "Failed to place order. Please try again."
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === "object" && error !== null && "message" in error) {
-        errorMessage = String(error.message)
-      }
-
-      Alert.alert("Order Failed", errorMessage)
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error placing order:', error);
+      Alert.alert(
+        'Order Failed',
+        error.message || 'Failed to place order. Please try again.'
+      );
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   if (items.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Shopping Cart</Text>
-        </View>
+        <LinearGradient colors={['#27AE60', '#2ECC71']} style={styles.header}>
+          <Text style={styles.headerTitle}>Shopping Cart</Text>
+          <Text style={styles.headerSubtitle}>
+            Your eco-friendly shopping basket
+          </Text>
+        </LinearGradient>
+
         <View style={styles.emptyContainer}>
-          <ShoppingBag size={64} color="#D1D5DB" />
+          <Text style={styles.emptyIcon}>🛒</Text>
           <Text style={styles.emptyTitle}>Your cart is empty</Text>
-          <Text style={styles.emptySubtitle}>Add some eco-friendly products to get started!</Text>
+          <Text style={styles.emptySubtitle}>
+            Add some eco-friendly products to get started!
+          </Text>
         </View>
       </SafeAreaView>
-    )
+    );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Shopping Cart</Text>
-        <Text style={styles.itemCount}>{items.length} items</Text>
-      </View>
+      {/* Header */}
+      <LinearGradient colors={['#27AE60', '#2ECC71']} style={styles.header}>
+        <Text style={styles.headerTitle}>Shopping Cart</Text>
+        <Text style={styles.headerSubtitle}>
+          {items.length} items in your basket
+        </Text>
+      </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.itemsList}>
+        {/* Cart Items */}
+        <View style={styles.itemsContainer}>
           {items.map((item) => (
             <CartItem key={item.id} item={item} />
           ))}
         </View>
 
-        {/* Eco Options */}
-        <View style={styles.ecoOptions}>
-          <View style={styles.ecoHeader}>
-            <Leaf size={20} color="#16A34A" />
-            <Text style={styles.ecoTitle}>Eco-Friendly Options</Text>
+        {/* Delivery Address */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MapPin size={20} color="#27AE60" />
+            <Text style={styles.sectionTitle}>Delivery Address</Text>
           </View>
-          <View style={styles.ecoOption}>
-            <View style={styles.checkbox}>
-              <Text style={styles.checkmark}>✓</Text>
-            </View>
-            <Text style={styles.ecoOptionText}>Use reusable packaging (Save ₹5)</Text>
+          <TextInput
+            style={styles.addressInput}
+            value={deliveryAddress}
+            onChangeText={setDeliveryAddress}
+            placeholder="Enter your delivery address"
+            multiline
+            numberOfLines={3}
+          />
+        </View>
+
+        {/* Payment Method */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <CreditCard size={20} color="#27AE60" />
+            <Text style={styles.sectionTitle}>Payment Method</Text>
           </View>
-          <View style={styles.ecoOption}>
-            <View style={styles.checkbox}>
-              <Text style={styles.checkmark}>✓</Text>
-            </View>
-            <Text style={styles.ecoOptionText}>Carbon-neutral delivery</Text>
+          <View style={styles.paymentOption}>
+            <Text style={styles.paymentText}>💰 Cash on Delivery</Text>
+            <Text style={styles.paymentSubtext}>
+              Pay when your order arrives
+            </Text>
+          </View>
+        </View>
+
+        {/* Delivery Info */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Truck size={20} color="#27AE60" />
+            <Text style={styles.sectionTitle}>Delivery Information</Text>
+          </View>
+          <View style={styles.deliveryInfo}>
+            <Text style={styles.deliveryText}>🚚 Standard Delivery</Text>
+            <Text style={styles.deliverySubtext}>
+              Delivered within 2-3 hours
+            </Text>
+            <Text style={styles.deliveryNote}>
+              {deliveryFee === 0
+                ? 'Free delivery on orders above ₹500'
+                : `Delivery fee: ${formatIndianCurrency(deliveryFee)}`}
+            </Text>
           </View>
         </View>
 
         {/* Order Summary */}
-        <View style={styles.summary}>
+        <View style={styles.summaryContainer}>
           <Text style={styles.summaryTitle}>Order Summary</Text>
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>{formatIndianCurrency(totalPrice)}</Text>
+            <Text style={styles.summaryLabel}>
+              Subtotal ({items.length} items)
+            </Text>
+            <Text style={styles.summaryValue}>
+              {formatIndianCurrency(totalPrice)}
+            </Text>
           </View>
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Delivery Fee</Text>
-            <Text style={[styles.summaryValue, deliveryFee === 0 && styles.freeDelivery]}>
-              {deliveryFee === 0 ? "FREE" : formatIndianCurrency(deliveryFee)}
+            <Text
+              style={[
+                styles.summaryValue,
+                deliveryFee === 0 && styles.freeDelivery,
+              ]}
+            >
+              {deliveryFee === 0 ? 'FREE' : formatIndianCurrency(deliveryFee)}
             </Text>
           </View>
 
-          {deliveryFee === 0 && <Text style={styles.freeDeliveryNote}>🎉 Free delivery on orders above ₹500!</Text>}
-
-          <View style={styles.summaryDivider} />
+          <View style={styles.divider} />
 
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryTotal}>Total</Text>
-            <Text style={styles.summaryTotalValue}>{formatIndianCurrency(finalTotal)}</Text>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalValue}>
+              {formatIndianCurrency(finalTotal)}
+            </Text>
+          </View>
+
+          <View style={styles.savingsContainer}>
+            <Text style={styles.savingsText}>
+              🌱 You're saving the environment with eco-friendly choices!
+            </Text>
           </View>
         </View>
       </ScrollView>
 
       {/* Checkout Button */}
       <View style={styles.checkoutContainer}>
-        <View style={styles.checkoutInfo}>
-          <View style={styles.deliveryInfo}>
-            <Truck size={16} color="#16A34A" />
-            <Text style={styles.deliveryText}>Ready for pickup in 2-3 hours</Text>
-          </View>
-          <View style={styles.paymentInfo}>
-            <CreditCard size={16} color="#6B7280" />
-            <Text style={styles.paymentText}>UPI, Card, Cash accepted</Text>
-          </View>
-        </View>
-        <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout}>
-          <Text style={styles.checkoutButtonText}>Place Order • {formatIndianCurrency(finalTotal)}</Text>
+        <TouchableOpacity
+          style={[
+            styles.checkoutButton,
+            loading && styles.checkoutButtonDisabled,
+          ]}
+          onPress={handleCheckout}
+          disabled={loading}
+        >
+          <LinearGradient
+            colors={['#27AE60', '#2ECC71']}
+            style={styles.checkoutGradient}
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <>
+                <Text style={styles.checkoutText}>Place Order</Text>
+                <Text style={styles.checkoutAmount}>
+                  {formatIndianCurrency(finalTotal)}
+                </Text>
+              </>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: '#F9FAFB',
   },
   header: {
-    backgroundColor: "#ffffff",
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    paddingBottom: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1F2937",
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    color: '#ffffff',
+    marginBottom: 4,
   },
-  itemCount: {
+  headerSubtitle: {
     fontSize: 14,
-    color: "#6B7280",
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontFamily: 'Inter-Regular',
   },
   content: {
     flex: 1,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 40,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: "#6B7280",
-    textAlign: "center",
-  },
-  itemsList: {
+  itemsContainer: {
     padding: 20,
+    gap: 16,
   },
-  ecoOptions: {
-    backgroundColor: "#F0FDF4",
-    margin: 20,
-    borderRadius: 16,
+  section: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 12,
     padding: 16,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  ecoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     marginBottom: 12,
   },
-  ecoTitle: {
+  sectionTitle: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#166534",
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
   },
-  ecoOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 8,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    backgroundColor: "#16A34A",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkmark: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  ecoOptionText: {
+  addressInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
     fontSize: 14,
-    color: "#15803D",
+    fontFamily: 'Inter-Regular',
+    color: '#1F2937',
+    textAlignVertical: 'top',
   },
-  summary: {
-    backgroundColor: "#ffffff",
-    margin: 20,
-    borderRadius: 16,
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  paymentText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  paymentSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'Inter-Regular',
+  },
+  deliveryInfo: {
+    gap: 4,
+  },
+  deliveryText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  deliverySubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'Inter-Regular',
+  },
+  deliveryNote: {
+    fontSize: 12,
+    color: '#27AE60',
+    fontFamily: 'Inter-Medium',
+    marginTop: 4,
+  },
+  summaryContainer: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 12,
     padding: 20,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -280,89 +373,111 @@ const styles = StyleSheet.create({
   },
   summaryTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#1F2937",
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
     marginBottom: 16,
   },
   summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
   summaryLabel: {
     fontSize: 14,
-    color: "#6B7280",
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
   },
   summaryValue: {
     fontSize: 14,
-    color: "#1F2937",
-    fontWeight: "600",
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
   },
   freeDelivery: {
-    color: "#16A34A",
+    color: '#27AE60',
   },
-  freeDeliveryNote: {
-    fontSize: 12,
-    color: "#16A34A",
-    textAlign: "center",
-    marginTop: -8,
-    marginBottom: 8,
-  },
-  summaryDivider: {
+  divider: {
     height: 1,
-    backgroundColor: "#E5E7EB",
-    marginVertical: 16,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 12,
   },
-  summaryTotal: {
+  totalLabel: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#1F2937",
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
   },
-  summaryTotalValue: {
+  totalValue: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#16A34A",
+    fontFamily: 'Inter-Bold',
+    color: '#27AE60',
+  },
+  savingsContainer: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  savingsText: {
+    fontSize: 12,
+    color: '#15803D',
+    fontFamily: 'Inter-Medium',
+    textAlign: 'center',
   },
   checkoutContainer: {
-    backgroundColor: "#ffffff",
-    borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
     padding: 20,
-  },
-  checkoutInfo: {
-    marginBottom: 16,
-    gap: 8,
-  },
-  deliveryInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  deliveryText: {
-    fontSize: 14,
-    color: "#16A34A",
-    fontWeight: "600",
-  },
-  paymentInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  paymentText: {
-    fontSize: 12,
-    color: "#6B7280",
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
   checkoutButton: {
-    backgroundColor: "#16A34A",
     borderRadius: 12,
-    height: 56,
-    justifyContent: "center",
-    alignItems: "center",
+    overflow: 'hidden',
   },
-  checkoutButtonText: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "bold",
+  checkoutButtonDisabled: {
+    opacity: 0.6,
   },
-})
+  checkoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  checkoutText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#ffffff',
+  },
+  checkoutAmount: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#ffffff',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+});
