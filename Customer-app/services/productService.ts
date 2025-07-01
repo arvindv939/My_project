@@ -1,55 +1,55 @@
-import API from "@/utils/api"
+import API from '@/utils/api';
 
 export interface Product {
-  _id: string
-  name: string
-  description?: string
-  price: number
-  category: string
-  imageUrl?: string
-  stock: number
-  unit: string
-  isOrganic?: boolean
-  ecoFriendly?: boolean
-  inStock: boolean
-  isActive?: boolean
-  rating?: number
-  reviews?: number
-  createdAt?: string
-  updatedAt?: string
+  _id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category: string;
+  imageUrl?: string;
+  stock: number;
+  unit: string;
+  isOrganic?: boolean;
+  ecoFriendly?: boolean;
+  inStock: boolean;
+  isActive?: boolean;
+  rating?: number;
+  reviews?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-interface ProductFilters {
-  category?: string
-  search?: string
-  limit?: number
-  page?: number
+export interface ProductFilters {
+  category?: string;
+  search?: string;
+  limit?: number;
+  page?: number;
 }
 
 interface ProductResponse {
-  success: boolean
-  products: any[]
-  totalPages: number
-  currentPage: number
-  total: number
+  success: boolean;
+  products: any[];
+  totalPages: number;
+  currentPage: number;
+  total: number;
 }
 
 class ProductService {
   private transformProduct(backendProduct: any): Product {
     // More lenient stock checking
-    const stockValue = Number(backendProduct.stock) || 0
-    const isActiveValue = backendProduct.isActive !== false // Default to true if not explicitly false
-    const inStockValue = stockValue > 0 && isActiveValue
+    const stockValue = Number(backendProduct.stock) || 0;
+    const isActiveValue = backendProduct.isActive !== false; // Default to true if not explicitly false
+    const inStockValue = stockValue > 0 && isActiveValue;
 
     const product: Product = {
       _id: backendProduct._id || backendProduct.id,
-      name: backendProduct.name || "",
-      description: backendProduct.description || "",
+      name: backendProduct.name || '',
+      description: backendProduct.description || '',
       price: Number(backendProduct.price) || 0,
-      category: backendProduct.category || "General",
+      category: backendProduct.category || 'General',
       imageUrl: backendProduct.imageUrl || backendProduct.image,
       stock: stockValue,
-      unit: backendProduct.unit || "kg",
+      unit: backendProduct.unit || 'kg',
       isOrganic: Boolean(backendProduct.isOrganic),
       ecoFriendly: Boolean(backendProduct.ecoFriendly),
       inStock: inStockValue,
@@ -58,97 +58,115 @@ class ProductService {
       reviews: Number(backendProduct.reviews) || 0,
       createdAt: backendProduct.createdAt,
       updatedAt: backendProduct.updatedAt,
-    }
+    };
 
-    console.log("ProductService: Transformed product:", {
+    console.log('ProductService: Transformed product:', {
       name: product.name,
+      category: product.category,
       stock: product.stock,
       isActive: product.isActive,
       inStock: product.inStock,
-      rawStock: backendProduct.stock,
-      rawIsActive: backendProduct.isActive,
-    })
+    });
 
-    return product
+    return product;
   }
 
   async getAllProducts(filters: ProductFilters = {}): Promise<Product[]> {
     try {
-      console.log("ProductService: Fetching products with filters:", filters)
+      console.log('ProductService: Fetching products with filters:', filters);
 
-      const params = new URLSearchParams()
-      if (filters.category) params.append("category", filters.category)
-      if (filters.search) params.append("search", filters.search)
-      if (filters.limit) params.append("limit", filters.limit.toString())
-      if (filters.page) params.append("page", filters.page.toString())
+      const params = new URLSearchParams();
+      if (filters.category) params.append('category', filters.category);
+      if (filters.search) params.append('search', filters.search);
+      if (filters.limit) params.append('limit', filters.limit.toString());
+      if (filters.page) params.append('page', filters.page.toString());
 
-      const endpoint = `/products${params.toString() ? `?${params.toString()}` : ""}`
-      console.log("ProductService: Making request to:", endpoint)
+      const endpoint = `/products${
+        params.toString() ? `?${params.toString()}` : ''
+      }`;
+      console.log('ProductService: Making request to:', endpoint);
 
-      const response = await API.get(endpoint)
-      console.log("ProductService: Raw response:", response.data)
+      const response = await API.get(endpoint);
+      console.log('ProductService: Raw response:', response.data);
 
-      const data: ProductResponse = response.data
+      const data: ProductResponse = response.data;
 
       if (data.success && Array.isArray(data.products)) {
-        const transformedProducts = data.products.map((product) => this.transformProduct(product))
+        const transformedProducts = data.products.map((product) =>
+          this.transformProduct(product)
+        );
 
-        console.log("ProductService: Returning", transformedProducts.length, "products")
-        console.log("ProductService: Sample product data:", transformedProducts[0])
-        return transformedProducts
+        console.log(
+          'ProductService: Returning',
+          transformedProducts.length,
+          'products'
+        );
+        if (transformedProducts.length > 0) {
+          console.log(
+            'ProductService: Sample product data:',
+            transformedProducts[0]
+          );
+          console.log('ProductService: Available categories:', [
+            ...new Set(transformedProducts.map((p) => p.category)),
+          ]);
+        }
+        return transformedProducts;
       } else {
-        console.warn("ProductService: Unexpected response format:", data)
-        return []
+        console.warn('ProductService: Unexpected response format:', data);
+        return [];
       }
     } catch (error: any) {
-      console.error("ProductService: Error fetching products:", error)
+      console.error('ProductService: Error fetching products:', error);
 
       if (error.response) {
-        console.error("ProductService: Error response:", error.response.data)
-        console.error("ProductService: Error status:", error.response.status)
+        console.error('ProductService: Error response:', error.response.data);
+        console.error('ProductService: Error status:', error.response.status);
       }
 
       if (error.response?.status === 404) {
-        return []
+        return [];
       }
 
-      throw error
+      throw error;
     }
   }
 
   async getProductById(id: string): Promise<Product | null> {
     try {
-      console.log("ProductService: Fetching product by ID:", id)
-      const response = await API.get(`/products/${id}`)
-      console.log("ProductService: Product response:", response.data)
+      console.log('ProductService: Fetching product by ID:', id);
+      const response = await API.get(`/products/${id}`);
+      console.log('ProductService: Product response:', response.data);
 
-      const data = response.data
+      const data = response.data;
 
       if (data.success && data.product) {
-        return this.transformProduct(data.product)
+        return this.transformProduct(data.product);
       } else if (data && !data.success) {
-        return this.transformProduct(data)
+        return this.transformProduct(data);
       }
 
-      return null
+      return null;
     } catch (error: any) {
-      console.error("ProductService: Error fetching product by ID:", error)
+      console.error('ProductService: Error fetching product by ID:', error);
 
       if (error.response?.status === 404) {
-        return null
+        return null;
       }
 
-      throw error
+      throw error;
     }
   }
 
   async getProductsByCategory(category: string): Promise<Product[]> {
-    return this.getAllProducts({ category })
+    console.log('ProductService: Getting products by category:', category);
+    return this.getAllProducts({ category });
   }
 
   async searchProducts(query: string): Promise<Product[]> {
-    return this.getAllProducts({ search: query })
+    console.log('ProductService: Searching products with query:', query);
+    return this.getAllProducts({ search: query });
   }
 }
 
-export const productService = new ProductService()
+export const productService = new ProductService();
+export type { ProductFilters };

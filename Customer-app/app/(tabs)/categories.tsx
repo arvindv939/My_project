@@ -21,13 +21,18 @@ import {
   type ProductFilters,
 } from '@/services/productService';
 
+// Updated categories to match backend data exactly
 const categories = [
-  { id: 'fruits', name: 'Fresh Fruits', icon: '🍎', color: '#EF4444' },
-  { id: 'vegetables', name: 'Vegetables', icon: '🥬', color: '#10B981' },
-  { id: 'dairy', name: 'Dairy & Eggs', icon: '🥛', color: '#3B82F6' },
-  { id: 'grains', name: 'Grains & Cereals', icon: '🌾', color: '#F59E0B' },
-  { id: 'organic', name: 'Organic', icon: '🌱', color: '#16A34A' },
-  { id: 'beverages', name: 'Beverages', icon: '🧃', color: '#8B5CF6' },
+  { id: 'Fruits', name: 'Fresh Fruits', icon: '🍎', color: '#EF4444' },
+  { id: 'Vegetables', name: 'Vegetables', icon: '🥬', color: '#10B981' },
+  { id: 'Dairy', name: 'Dairy & Eggs', icon: '🥛', color: '#3B82F6' },
+  { id: 'Bakery', name: 'Bakery', icon: '🍞', color: '#D97706' },
+  { id: 'Snacks', name: 'Snacks', icon: '🍿', color: '#7C3AED' },
+  { id: 'Beverages', name: 'Beverages', icon: '🧃', color: '#8B5CF6' },
+  { id: 'Staples', name: 'Staples', icon: '🌾', color: '#F59E0B' },
+  { id: 'Household', name: 'Household', icon: '🧽', color: '#6B7280' },
+  { id: 'Personal Care', name: 'Personal Care', icon: '🧴', color: '#EC4899' },
+  { id: 'Others', name: 'Others', icon: '📦', color: '#64748B' },
 ];
 
 export default function CategoriesScreen() {
@@ -37,6 +42,8 @@ export default function CategoriesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState<ProductFilters>({});
+  const [error, setError] = useState<string | null>(null);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
 
   useEffect(() => {
     fetchProducts();
@@ -45,6 +52,10 @@ export default function CategoriesScreen() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
+      setError(null);
+
+      console.log('Fetching products with category:', selectedCategory);
+
       const productFilters: ProductFilters = {
         ...filters,
         category: selectedCategory || undefined,
@@ -54,9 +65,19 @@ export default function CategoriesScreen() {
       const fetchedProducts = await productService.getAllProducts(
         productFilters
       );
+
+      console.log('Fetched products:', fetchedProducts.length);
+
+      if (fetchedProducts.length > 0) {
+        const categories = [...new Set(fetchedProducts.map((p) => p.category))];
+        console.log('Available categories from products:', categories);
+        setAvailableCategories(categories);
+      }
+
       setProducts(fetchedProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
+      setError('Failed to load products. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -72,16 +93,24 @@ export default function CategoriesScreen() {
     if (searchQuery.trim()) {
       try {
         setLoading(true);
+        setError(null);
         const searchResults = await productService.searchProducts(searchQuery);
         setProducts(searchResults);
       } catch (error) {
         console.error('Error searching products:', error);
+        setError('Search failed. Please try again.');
       } finally {
         setLoading(false);
       }
     } else {
       fetchProducts();
     }
+  };
+
+  const handleCategorySelect = (categoryId: string | null) => {
+    console.log('Selected category:', categoryId);
+    setSelectedCategory(categoryId);
+    setSearchQuery(''); // Clear search when selecting category
   };
 
   return (
@@ -133,7 +162,7 @@ export default function CategoriesScreen() {
               styles.categoryCard,
               !selectedCategory && styles.categoryCardActive,
             ]}
-            onPress={() => setSelectedCategory(null)}
+            onPress={() => handleCategorySelect(null)}
           >
             <Text style={styles.categoryIcon}>🛒</Text>
             <Text
@@ -153,11 +182,7 @@ export default function CategoriesScreen() {
                 styles.categoryCard,
                 selectedCategory === category.id && styles.categoryCardActive,
               ]}
-              onPress={() =>
-                setSelectedCategory(
-                  selectedCategory === category.id ? null : category.id
-                )
-              }
+              onPress={() => handleCategorySelect(category.id)}
             >
               <Text style={styles.categoryIcon}>{category.icon}</Text>
               <Text
@@ -172,6 +197,25 @@ export default function CategoriesScreen() {
           ))}
         </ScrollView>
       </View>
+
+      {/* Debug Info */}
+      {availableCategories.length > 0 && (
+        <View style={styles.debugContainer}>
+          <Text style={styles.debugText}>
+            Available categories: {availableCategories.join(', ')}
+          </Text>
+        </View>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={fetchProducts} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Products Grid */}
       <ScrollView
@@ -191,8 +235,21 @@ export default function CategoriesScreen() {
             <Text style={styles.emptyIcon}>🛒</Text>
             <Text style={styles.emptyTitle}>No products found</Text>
             <Text style={styles.emptySubtitle}>
-              Try adjusting your search or browse different categories
+              {selectedCategory
+                ? `No products found in ${
+                    categories.find((c) => c.id === selectedCategory)?.name ||
+                    'this category'
+                  }`
+                : 'Try adjusting your search or browse different categories'}
             </Text>
+            {selectedCategory && (
+              <TouchableOpacity
+                onPress={() => handleCategorySelect(null)}
+                style={styles.showAllButton}
+              >
+                <Text style={styles.showAllButtonText}>Show All Products</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <View style={styles.productsGrid}>
@@ -331,6 +388,47 @@ const styles = StyleSheet.create({
   categoryNameActive: {
     color: '#8B5CF6',
   },
+  debugContainer: {
+    backgroundColor: '#FEF3C7',
+    margin: 20,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#92400E',
+    fontFamily: 'Inter-Regular',
+  },
+  errorContainer: {
+    backgroundColor: '#FEF2F2',
+    margin: 20,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  errorText: {
+    flex: 1,
+    color: '#DC2626',
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+  },
+  retryButton: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+  },
   productsContainer: {
     flex: 1,
   },
@@ -370,6 +468,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 16,
+  },
+  showAllButton: {
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  showAllButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
   },
   productsGrid: {
     flexDirection: 'row',
