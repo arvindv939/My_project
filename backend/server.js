@@ -106,8 +106,7 @@ app.use((error, req, res, next) => {
   ) {
     return res.status(400).json({
       message: "Invalid data format for React rendering",
-      error:
-        "Data contains objects that cannot be rendered as React children",
+      error: "Data contains objects that cannot be rendered as React children",
       details:
         "Ensure all data being rendered is properly formatted (strings, numbers, or arrays)",
       timestamp: new Date().toISOString(),

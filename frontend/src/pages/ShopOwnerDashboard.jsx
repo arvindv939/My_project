@@ -619,6 +619,19 @@ const ShopOwnerDashboard = () => {
     (o) => o.status === "completed" || o.status === "Completed"
   ).length;
 
+  // Helper function to get dynamic labels based on selected unit
+  const getPriceLabel = () => {
+    return form.unit ? `Price (₹ per ${form.unit})*` : "Price (₹)*";
+  };
+
+  const getStockLabel = () => {
+    return form.unit ? `Stock (in ${form.unit})*` : "Stock*";
+  };
+
+  const getStockPlaceholder = () => {
+    return form.unit ? `Enter quantity in ${form.unit}` : "Enter quantity";
+  };
+
   return (
     <div className="bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 min-h-screen p-6 font-sans relative overflow-x-auto">
       {/* Loading Overlay */}
@@ -1303,8 +1316,9 @@ const ShopOwnerDashboard = () => {
                               #{order._id?.slice(-6)}
                             </td>
                             <td className="py-4 px-6">
-                              {order.customer?.name || "N/A"}
+                              {order.customerId?.name || "N/A"}
                             </td>
+
                             <td className="py-4 px-6">
                               {order.items?.length || 0} items
                             </td>
@@ -1333,10 +1347,10 @@ const ShopOwnerDashboard = () => {
                                     : "bg-yellow-100 text-yellow-800"
                                 }`}
                               >
-                                <option value="pending">Pending</option>
-                                <option value="processing">Processing</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="preparing">Preparing</option>
                                 <option value="ready">Ready</option>
-                                <option value="completed">Completed</option>
+                                <option value="delivered">Delivered</option>
                                 <option value="cancelled">Cancelled</option>
                               </select>
                             </td>
@@ -1471,21 +1485,31 @@ const ShopOwnerDashboard = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                       <label className="block text-gray-700 font-semibold mb-2">
-                        Price*
+                        {getPriceLabel()}
                       </label>
-                      <input
-                        type="number"
-                        min="1"
-                        step="0.01"
-                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                        value={form.price}
-                        onChange={(e) =>
-                          setForm({ ...form, price: e.target.value })
-                        }
-                        disabled={loading}
-                        placeholder="0.00"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-semibold">
+                          ₹
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          step="0.01"
+                          className="w-full border border-gray-300 rounded-xl p-3 pl-8 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                          value={form.price}
+                          onChange={(e) =>
+                            setForm({ ...form, price: e.target.value })
+                          }
+                          disabled={loading}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      {form.unit && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Price per {form.unit}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1508,7 +1532,7 @@ const ShopOwnerDashboard = () => {
 
                     <div>
                       <label className="block text-gray-700 font-semibold mb-2">
-                        Stock*
+                        {getStockLabel()}
                       </label>
                       <input
                         type="number"
@@ -1520,8 +1544,13 @@ const ShopOwnerDashboard = () => {
                           setForm({ ...form, stock: e.target.value })
                         }
                         disabled={loading}
-                        placeholder="0"
+                        placeholder={getStockPlaceholder()}
                       />
+                      {form.unit && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Quantity in {form.unit}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1576,7 +1605,9 @@ const ShopOwnerDashboard = () => {
                           <div className="flex items-center space-x-4">
                             <img
                               src={
+                                // eslint-disable-next-line no-constant-binary-expression
                                 URL.createObjectURL(form.image) ||
+                                "/placeholder.svg" ||
                                 "/placeholder.svg"
                               }
                               alt="Preview"

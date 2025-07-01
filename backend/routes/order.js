@@ -11,22 +11,32 @@ router.post("/", authMiddleware, async (req, res) => {
   try {
     const { items, deliveryAddress, paymentMethod } = req.body;
 
-    // Calculate total amount
+    // Validate items
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Order items are required",
+      });
+    }
+
+    // Calculate total amount and prepare order items
     let totalAmount = 0;
     const orderItems = [];
 
     for (const item of items) {
       const product = await Product.findById(item.productId);
       if (!product) {
-        return res
-          .status(404)
-          .json({ message: `Product ${item.productId} not found` });
+        return res.status(404).json({
+          success: false,
+          message: `Product ${item.productId} not found`,
+        });
       }
 
       if (product.stock < item.quantity) {
-        return res
-          .status(400)
-          .json({ message: `Insufficient stock for ${product.name}` });
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for ${product.name}`,
+        });
       }
 
       const itemTotal = product.price * item.quantity;
@@ -54,13 +64,20 @@ router.post("/", authMiddleware, async (req, res) => {
     });
 
     await order.save();
-    await order.populate("items.product", "name images");
     await order.populate("customer", "name email phone");
+    await order.populate("items.product", "name images");
 
-    res.status(201).json(order);
+    res.status(201).json({
+      success: true,
+      message: "Order created successfully",
+      order,
+    });
   } catch (error) {
     console.error("Create order error:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
@@ -71,10 +88,16 @@ router.get("/my-orders", authMiddleware, async (req, res) => {
       .populate("items.product", "name images")
       .sort({ createdAt: -1 });
 
-    res.json(orders);
+    res.json({
+      success: true,
+      orders,
+    });
   } catch (error) {
     console.error("Get user orders error:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
@@ -85,7 +108,7 @@ router.get(
   roleMiddleware(["shop_owner", "ShopOwner"]),
   async (req, res) => {
     try {
-      console.log("Fetching orders for shop owner:", req.user.id);
+      console.log("Fetching orders for shop owner:", req.user.userId);
 
       // Find products created by this shop owner
       const shopOwnerProducts = await Product.find({
@@ -129,7 +152,10 @@ router.get("/:id", authMiddleware, async (req, res) => {
       .populate("customer", "name email phone");
 
     if (!order) {
-      return res.status(404).json({ message: "Order not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
 
     // Check if user owns this order or is admin/shop_owner
@@ -137,13 +163,22 @@ router.get("/:id", authMiddleware, async (req, res) => {
       order.customer._id.toString() !== req.user.userId &&
       !["admin", "shop_owner", "ShopOwner"].includes(req.user.role)
     ) {
-      return res.status(403).json({ message: "Not authorized" });
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized",
+      });
     }
 
-    res.json(order);
+    res.json({
+      success: true,
+      order,
+    });
   } catch (error) {
     console.error("Get order error:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
@@ -156,6 +191,22 @@ router.put(
     try {
       const { status } = req.body;
 
+      const validStatuses = [
+        "pending",
+        "confirmed",
+        "preparing",
+        "ready",
+        "delivered",
+        "cancelled",
+      ];
+
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status",
+        });
+      }
+
       const order = await Order.findByIdAndUpdate(
         req.params.id,
         { status },
@@ -165,13 +216,23 @@ router.put(
         .populate("customer", "name email phone");
 
       if (!order) {
-        return res.status(404).json({ message: "Order not found" });
+        return res.status(404).json({
+          success: false,
+          message: "Order not found",
+        });
       }
 
-      res.json(order);
+      res.json({
+        success: true,
+        message: "Order status updated successfully",
+        order,
+      });
     } catch (error) {
       console.error("Update order status error:", error);
-      res.status(500).json({ message: "Server error" });
+      res.status(500).json({
+        success: false,
+        message: "Server error",
+      });
     }
   }
 );
@@ -182,17 +243,26 @@ router.put("/:id/cancel", authMiddleware, async (req, res) => {
     const order = await Order.findById(req.params.id);
 
     if (!order) {
-      return res.status(404).json({ message: "Order not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
 
     // Check if user owns this order
     if (order.customer.toString() !== req.user.userId) {
-      return res.status(403).json({ message: "Not authorized" });
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized",
+      });
     }
 
     // Can only cancel pending orders
     if (order.status !== "pending") {
-      return res.status(400).json({ message: "Cannot cancel this order" });
+      return res.status(400).json({
+        success: false,
+        message: "Cannot cancel this order",
+      });
     }
 
     // Restore product stock
@@ -207,10 +277,16 @@ router.put("/:id/cancel", authMiddleware, async (req, res) => {
     order.status = "cancelled";
     await order.save();
 
-    res.json({ message: "Order cancelled successfully" });
+    res.json({
+      success: true,
+      message: "Order cancelled successfully",
+    });
   } catch (error) {
     console.error("Cancel order error:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
@@ -234,6 +310,7 @@ router.get("/", authMiddleware, roleMiddleware(["admin"]), async (req, res) => {
     const total = await Order.countDocuments(query);
 
     res.json({
+      success: true,
       orders,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
@@ -241,7 +318,10 @@ router.get("/", authMiddleware, roleMiddleware(["admin"]), async (req, res) => {
     });
   } catch (error) {
     console.error("Get all orders error:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 

@@ -1,10 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const Order = require("../models/Order");
+const Product = require("../models/Product");
 const authMiddleware = require("../middlewares/authMiddleware");
 const roleMiddleware = require("../middlewares/roleMiddleware");
 
-// Get orders for shop owner - MUST come before /:id route
+// ✅ Get orders for shop owner
 router.get(
   "/shop-owner",
   authMiddleware,
@@ -13,12 +14,17 @@ router.get(
     try {
       console.log("Fetching orders for shop owner:", req.user.userId);
 
-      // Find orders where the shop owner created products in the order
+      const shopOwnerProducts = await Product.find({
+        createdBy: req.user.userId,
+      }).select("_id");
+
+      const productIds = shopOwnerProducts.map((p) => p._id);
+
       const orders = await Order.find({
-        "items.createdBy": req.user.userId,
+        "items.productId": { $in: productIds },
       })
-        .populate("customer", "name email")
-        .populate("items.product", "name price imageUrl")
+        .populate("customerId", "name email")
+        .populate("items.productId", "name price imageUrl")
         .sort({ createdAt: -1 });
 
       console.log("Found orders:", orders.length);
@@ -38,7 +44,25 @@ router.get(
   }
 );
 
-// Get all orders (admin only)
+// ✅ Get orders for customer
+router.get("/my-orders", authMiddleware, async (req, res) => {
+  try {
+    const orders = await Order.find({ customerId: req.user.userId })
+      .populate("items.productId", "name price imageUrl")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, orders });
+  } catch (error) {
+    console.error("Error fetching customer orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch your orders",
+      error: error.message,
+    });
+  }
+});
+
+// ✅ Get all orders (admin only)
 router.get("/", authMiddleware, roleMiddleware(["admin"]), async (req, res) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
@@ -49,8 +73,8 @@ router.get("/", authMiddleware, roleMiddleware(["admin"]), async (req, res) => {
     }
 
     const orders = await Order.find(query)
-      .populate("customer", "name email")
-      .populate("items.product", "name price imageUrl")
+      .populate("customerId", "name email")
+      .populate("items.productId", "name price imageUrl")
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -74,12 +98,12 @@ router.get("/", authMiddleware, roleMiddleware(["admin"]), async (req, res) => {
   }
 });
 
-// Get single order by ID - MUST come after specific routes
+// ✅ Get single order by ID
 router.get("/:id", authMiddleware, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate("customer", "name email phone")
-      .populate("items.product", "name price imageUrl");
+      .populate("customerId", "name email phone")
+      .populate("items.productId", "name price imageUrl");
 
     if (!order) {
       return res.status(404).json({
@@ -88,10 +112,9 @@ router.get("/:id", authMiddleware, async (req, res) => {
       });
     }
 
-    // Check if user can access this order
     if (
       req.user.role === "customer" &&
-      order.customer._id.toString() !== req.user.userId
+      order.customerId.toString() !== req.user.userId
     ) {
       return res.status(403).json({
         success: false,
@@ -113,10 +136,10 @@ router.get("/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// Create new order
+// ✅ Create new order
 router.post("/", authMiddleware, async (req, res) => {
   try {
-    const { items, deliveryAddress, paymentMethod, totalAmount } = req.body;
+    let { items, deliveryAddress, paymentMethod, totalAmount } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -125,18 +148,24 @@ router.post("/", authMiddleware, async (req, res) => {
       });
     }
 
+    const normalizedItems = items.map((item) => ({
+      productId: item.product || item.productId,
+      quantity: item.quantity,
+      price: item.price,
+    }));
+
     const order = new Order({
-      customer: req.user.userId,
-      items,
+      customerId: req.user.userId,
+      items: normalizedItems,
+      totalAmount,
       deliveryAddress,
       paymentMethod,
-      totalAmount,
       status: "pending",
     });
 
     await order.save();
-    await order.populate("customer", "name email");
-    await order.populate("items.product", "name price imageUrl");
+    await order.populate("customerId", "name email");
+    await order.populate("items.productId", "name price imageUrl");
 
     res.status(201).json({
       success: true,
@@ -153,7 +182,7 @@ router.post("/", authMiddleware, async (req, res) => {
   }
 });
 
-// Update order status
+// ✅ Update order status
 router.put("/:id/status", authMiddleware, async (req, res) => {
   try {
     const { status } = req.body;
@@ -167,6 +196,7 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
       "delivered",
       "cancelled",
     ];
+
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -178,7 +208,7 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
       orderId,
       { status, updatedAt: new Date() },
       { new: true }
-    ).populate("customer", "name email");
+    ).populate("customerId", "name email");
 
     if (!order) {
       return res.status(404).json({

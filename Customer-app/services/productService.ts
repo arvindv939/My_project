@@ -17,9 +17,11 @@ export interface Product {
   reviews?: number;
   createdAt?: string;
   updatedAt?: string;
+  originalPrice?: number;
+  discount?: number;
 }
 
-export interface ProductFilters {
+interface ProductFilters {
   category?: string;
   search?: string;
   limit?: number;
@@ -36,7 +38,7 @@ interface ProductResponse {
 
 class ProductService {
   private transformProduct(backendProduct: any): Product {
-    // More lenient stock checking
+    // Fix the stock checking logic
     const stockValue = Number(backendProduct.stock) || 0;
     const isActiveValue = backendProduct.isActive !== false; // Default to true if not explicitly false
     const inStockValue = stockValue > 0 && isActiveValue;
@@ -54,18 +56,23 @@ class ProductService {
       ecoFriendly: Boolean(backendProduct.ecoFriendly),
       inStock: inStockValue,
       isActive: isActiveValue,
-      rating: Number(backendProduct.rating) || 4.5,
-      reviews: Number(backendProduct.reviews) || 0,
+      rating:
+        Number(backendProduct.rating?.average || backendProduct.rating) || 4.5,
+      reviews:
+        Number(backendProduct.rating?.count || backendProduct.reviews) || 0,
       createdAt: backendProduct.createdAt,
       updatedAt: backendProduct.updatedAt,
+      originalPrice: backendProduct.originalPrice,
+      discount: Number(backendProduct.discount) || 0,
     };
 
     console.log('ProductService: Transformed product:', {
       name: product.name,
-      category: product.category,
       stock: product.stock,
       isActive: product.isActive,
       inStock: product.inStock,
+      rawStock: backendProduct.stock,
+      rawIsActive: backendProduct.isActive,
     });
 
     return product;
@@ -101,15 +108,10 @@ class ProductService {
           transformedProducts.length,
           'products'
         );
-        if (transformedProducts.length > 0) {
-          console.log(
-            'ProductService: Sample product data:',
-            transformedProducts[0]
-          );
-          console.log('ProductService: Available categories:', [
-            ...new Set(transformedProducts.map((p) => p.category)),
-          ]);
-        }
+        console.log(
+          'ProductService: Sample product data:',
+          transformedProducts[0]
+        );
         return transformedProducts;
       } else {
         console.warn('ProductService: Unexpected response format:', data);
@@ -158,12 +160,10 @@ class ProductService {
   }
 
   async getProductsByCategory(category: string): Promise<Product[]> {
-    console.log('ProductService: Getting products by category:', category);
     return this.getAllProducts({ category });
   }
 
   async searchProducts(query: string): Promise<Product[]> {
-    console.log('ProductService: Searching products with query:', query);
     return this.getAllProducts({ search: query });
   }
 }
