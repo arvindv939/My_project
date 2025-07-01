@@ -16,6 +16,10 @@ const orderItemSchema = new mongoose.Schema({
     required: true,
     min: 0,
   },
+  picked: {
+    type: Boolean,
+    default: false, // ⬅️ Add this line
+  },
 });
 
 const orderSchema = new mongoose.Schema(

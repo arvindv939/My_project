@@ -5,6 +5,7 @@ import axios from "axios";
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
 import QRCodeGenerator from "../components/QRCodeGenerator";
+import OrderTable from "../components/OrderTable";
 
 // Backend API URL
 const API_URL = "http://localhost:5000/api/products";
@@ -616,7 +617,9 @@ const ShopOwnerDashboard = () => {
     (o) => o.status === "pending" || o.status === "Pending"
   ).length;
   const completedOrders = orders.filter(
-    (o) => o.status === "completed" || o.status === "Completed"
+    (o) =>
+      o.status?.toLowerCase() === "completed" ||
+      o.status?.toLowerCase() === "delivered"
   ).length;
 
   // Helper function to get dynamic labels based on selected unit
@@ -1274,115 +1277,10 @@ const ShopOwnerDashboard = () => {
               </div>
 
               {/* Orders Table */}
-              <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                      <tr>
-                        <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                          Order ID
-                        </th>
-                        <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                          Customer
-                        </th>
-                        <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                          Items
-                        </th>
-                        <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                          Total
-                        </th>
-                        <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                          Status
-                        </th>
-                        <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                          Date
-                        </th>
-                        <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.length > 0 ? (
-                        orders.map((order, index) => (
-                          <motion.tr
-                            key={order._id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className="border-b border-gray-100 hover:bg-gray-50"
-                          >
-                            <td className="py-4 px-6 font-medium">
-                              #{order._id?.slice(-6)}
-                            </td>
-                            <td className="py-4 px-6">
-                              {order.customerId?.name || "N/A"}
-                            </td>
-
-                            <td className="py-4 px-6">
-                              {order.items?.length || 0} items
-                            </td>
-                            <td className="py-4 px-6 font-semibold text-green-600">
-                              ₹{order.totalAmount || 0}
-                            </td>
-                            <td className="py-4 px-6">
-                              <select
-                                value={order.status || "pending"}
-                                onChange={(e) =>
-                                  handleOrderStatusUpdate(
-                                    order._id,
-                                    e.target.value
-                                  )
-                                }
-                                className={`px-3 py-1 rounded-full text-xs font-medium border-0 ${
-                                  order.status === "completed" ||
-                                  order.status === "Completed"
-                                    ? "bg-green-100 text-green-800"
-                                    : order.status === "processing" ||
-                                      order.status === "Processing"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : order.status === "ready" ||
-                                      order.status === "Ready"
-                                    ? "bg-purple-100 text-purple-800"
-                                    : "bg-yellow-100 text-yellow-800"
-                                }`}
-                              >
-                                <option value="confirmed">Confirmed</option>
-                                <option value="preparing">Preparing</option>
-                                <option value="ready">Ready</option>
-                                <option value="delivered">Delivered</option>
-                                <option value="cancelled">Cancelled</option>
-                              </select>
-                            </td>
-                            <td className="py-4 px-6 text-gray-600">
-                              {new Date(order.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="py-4 px-6">
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg"
-                                title="View Details"
-                              >
-                                👁️
-                              </motion.button>
-                            </td>
-                          </motion.tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="text-center py-8 text-gray-500"
-                          >
-                            No orders found
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <OrderTable
+                orders={orders}
+                handleOrderStatusUpdate={handleOrderStatusUpdate}
+              />
             </motion.div>
           )}
         </AnimatePresence>

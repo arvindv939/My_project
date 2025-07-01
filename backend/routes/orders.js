@@ -152,6 +152,7 @@ router.post("/", authMiddleware, async (req, res) => {
       productId: item.product || item.productId,
       quantity: item.quantity,
       price: item.price,
+      picked: false,
     }));
 
     const order = new Order({
@@ -231,5 +232,40 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
     });
   }
 });
+
+// ✅ Mark individual product in order as picked/unpicked
+router.put(
+  "/:orderId/items/:productId",
+  authMiddleware,
+  roleMiddleware(["shop_owner", "ShopOwner"]),
+  async (req, res) => {
+    const { orderId, productId } = req.params;
+    const { picked } = req.body;
+
+    try {
+      const order = await Order.findById(orderId);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+
+      const item = order.items.find(
+        (i) => i.productId.toString() === productId
+      );
+
+      if (!item)
+        return res.status(404).json({ message: "Item not found in order" });
+
+      item.picked = picked;
+      await order.save();
+
+      res.json({ success: true, message: "Item updated", order });
+    } catch (err) {
+      console.error("Update item error:", err);
+      res.status(500).json({
+        success: false,
+        message: "Failed to update item",
+        error: err.message,
+      });
+    }
+  }
+);
 
 module.exports = router;

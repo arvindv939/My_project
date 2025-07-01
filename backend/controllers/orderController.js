@@ -1,8 +1,8 @@
-const express = require("express")
-const router = express.Router()
-const Order = require("../models/Order")
-const QRCode = require("qrcode")
-const authMiddleware = require("../middlewares/authMiddleware")
+const express = require("express");
+const router = express.Router();
+const Order = require("../models/Order");
+const QRCode = require("qrcode");
+const authMiddleware = require("../middlewares/authMiddleware");
 
 // Create Order
 router.post("/create", authMiddleware, async (req, res) => {
@@ -18,29 +18,26 @@ router.post("/create", authMiddleware, async (req, res) => {
     total,
     totalAmount,
     deliveryAddress,
-  } = req.body
+  } = req.body;
 
   try {
-    // Handle both 'products' and 'items' field names for compatibility
-    const orderItems = items || products
+    const orderItems = items || products;
 
     if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Order items are required",
-      })
+      });
     }
 
-    // Calculate total if not provided
-    let orderTotal = totalAmount || total
+    let orderTotal = totalAmount || total;
     if (!orderTotal) {
       orderTotal = orderItems.reduce((sum, item) => {
-        return sum + (item.price || 0) * (item.quantity || 1)
-      }, 0)
+        return sum + (item.price || 0) * (item.quantity || 1);
+      }, 0);
     }
 
-    // Use deliveryAddress or address for order address
-    const orderAddress = deliveryAddress || address || "Not specified"
+    const orderAddress = deliveryAddress || address || "Not specified";
 
     const order = new Order({
       customer: req.user.id,
@@ -57,96 +54,144 @@ router.post("/create", authMiddleware, async (req, res) => {
       notes: notes || "",
       address: orderAddress,
       status: "pending",
-    })
+    });
 
-    await order.save()
+    await order.save();
 
-    // Generate QR Code after saving to get the order ID
-    const qrData = `OrderID:${order._id}`
+    // Generate QR
+    const qrData = `OrderID:${order._id}`;
     try {
-      order.qrCode = await QRCode.toDataURL(qrData)
-      await order.save()
+      order.qrCode = await QRCode.toDataURL(qrData);
+      await order.save();
     } catch (qrError) {
-      console.log("QR Code generation failed, but order created:", qrError.message)
+      console.log("QR Code failed:", qrError.message);
     }
 
     res.status(201).json({
       success: true,
       message: "Order placed successfully",
       order,
-    })
+    });
   } catch (error) {
-    console.error("Error creating order:", error)
+    console.error("Error creating order:", error);
     res.status(500).json({
       success: false,
       message: "Server error while creating order",
       error: error.message,
-    })
+    });
   }
-})
+});
 
-// Get Orders
+// Get All Orders (Admin)
 router.get("/", authMiddleware, async (req, res) => {
   try {
-    const orders = await Order.find().populate("customer", "name email").populate("products.product")
-    res.json(orders)
+    const orders = await Order.find()
+      .populate("customer", "name email")
+      .populate("products.product", "name price unit"); // include unit
+    res.json(orders);
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message })
+    res.status(500).json({ message: "Server error", error: error.message });
   }
-})
+});
+
+// Get Shop Owner Orders
+// Get Orders for Shop Owner
+router.get("/shop-owner", authMiddleware, async (req, res) => {
+  try {
+    const orders = await Order.find()
+      .populate("customerId", "name")
+      .populate("items.productId", "name price unit");
+
+    res.status(200).json({
+      success: true,
+      orders,
+    });
+  } catch (error) {
+    console.error("Error fetching shop owner orders:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching orders",
+    });
+  }
+});
 
 // Update Order Status
 router.put("/:id/status", authMiddleware, async (req, res) => {
-  const { id } = req.params
-  const { status } = req.body
-  try {
-    const order = await Order.findByIdAndUpdate(id, { status }, { new: true })
-    res.json({ message: "Order status updated", order })
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message })
-  }
-})
+  const { id } = req.params;
+  const { status } = req.body;
 
-// Get Orders by Customer
+  if (
+    !["pending", "confirmed", "ready", "delivered", "cancelled"].includes(
+      status?.toLowerCase()
+    )
+  ) {
+    return res.status(400).json({ message: "Invalid status" });
+  }
+
+  try {
+    const order = await Order.findByIdAndUpdate(id, { status }, { new: true });
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+    res.json({ message: "Order status updated", order });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// Get Customer Orders
 router.get("/customer", authMiddleware, async (req, res) => {
   try {
-    const orders = await Order.find({ customer: req.user.id }).populate("products.product").sort({ createdAt: -1 })
-    res.json({
-      success: true,
-      orders,
-    })
+    const orders = await Order.find({ customer: req.user.id })
+      .populate("products.product", "name price unit")
+      .sort({ createdAt: -1 });
+
+    const transformed = orders.map((order) => ({
+      ...order.toObject(),
+      items: order.products.map((p) => ({
+        productId: p.product,
+        quantity: p.quantity,
+        price: p.price,
+      })),
+    }));
+
+    res.json({ success: true, orders: transformed });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message,
-    })
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: error.message });
   }
-})
+});
 
 // Get Single Order
 router.get("/:id", authMiddleware, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate("customer", "name email").populate("products.product")
+    const order = await Order.findById(req.params.id)
+      .populate("customer", "name email")
+      .populate("products.product", "name price unit");
 
     if (!order) {
       return res.status(404).json({
         success: false,
         message: "Order not found",
-      })
+      });
     }
 
-    res.json({
-      success: true,
-      order,
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message,
-    })
-  }
-})
+    const formatted = {
+      ...order.toObject(),
+      items: order.products.map((p) => ({
+        productId: p.product,
+        quantity: p.quantity,
+        price: p.price,
+      })),
+    };
 
-module.exports = router
+    res.json({ success: true, order: formatted });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ success: false, message: "Server error", error: error.message });
+  }
+});
+
+module.exports = router;
