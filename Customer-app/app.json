@@ -38,6 +38,7 @@
       "typedRoutes": true
     },
     "extra": {
+      "apiBaseUrl": "http://192.168.1.12:5000/api", // ✅ UPDATE THIS TO MATCH YOUR PC IP
       "router": {
         "origin": false
       }

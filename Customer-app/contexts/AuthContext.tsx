@@ -140,7 +140,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         name: userData.name.trim(),
         email: userData.email.toLowerCase().trim(),
         password: userData.password,
-        role: 'Customer',
+        phone: userData.phone.trim(), // ✅ added
+        address: userData.address.trim(), // ✅ added
+        role: 'Customer', // ✅ required by backend
       };
 
       console.log('Registration payload:', registerPayload);
@@ -148,7 +150,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const response = await API.post('/auth/register', registerPayload);
       console.log('Registration response:', response.data);
 
-      if (response.data.message === 'Registration successful!') {
+      if (response.data.message === 'User registered successfully') {
         console.log('Registration successful, attempting auto-login...');
         // Auto-login after successful registration
         return await login(userData.email, userData.password);
@@ -162,7 +164,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         error.response?.data || error.message
       );
 
-      // Show specific error message
       if (error.response?.data?.error) {
         throw new Error(error.response.data.error);
       } else if (error.response?.status === 400) {

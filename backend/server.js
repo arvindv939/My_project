@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
+const os = require("os");
 
 // Load environment variables
 dotenv.config();
@@ -116,19 +117,24 @@ app.use((error, req, res, next) => {
   res.status(500).json({
     message: "Internal server error",
     error:
-      process.env.NODE_ENV === "development"
+      process.env.NODE_ENV === "development"``````````````
         ? error.message
         : "Something went wrong",
   });
 });
 
-// Start the server
+// ✅ Start the server and bind to all interfaces (0.0.0.0)
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 API available at http://localhost:${PORT}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
+app.listen(PORT, "0.0.0.0", () => {
+  const interfaces = os.networkInterfaces();
+  const wifi = interfaces.Ethernet || interfaces["Wi-Fi"] || interfaces["WLAN"] || [];
+  const localIP = wifi.find((i) => i.family === "IPv4")?.address || "192.168.1.12";
+
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+  console.log(`📱 Accessible on your LAN at: http://${localIP}:${PORT}`);
+  console.log(`🏥 Health check: http://${localIP}:${PORT}/api/health`);
 });
 
 module.exports = app;
+

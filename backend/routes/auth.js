@@ -9,7 +9,7 @@ const router = express.Router();
 // Register
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, role, phone } = req.body;
+    const { name, email, password, role, phone, address } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -28,6 +28,7 @@ router.post("/register", async (req, res) => {
       password: hashedPassword,
       role: role || "customer",
       phone,
+      address, // ✅ added address to fix validation
     });
 
     await user.save();

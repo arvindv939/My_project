@@ -30,15 +30,13 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["customer", "shopOwner", "admin"],
-      default: "shopOwner",
+      enum: ["Customer", "ShopOwner", "Admin"], // ✅ Capitalized roles
+      default: "ShopOwner",
     },
     address: {
-      street: String,
-      city: String,
-      state: String,
-      zipCode: String,
-      country: { type: String, default: "India" },
+      type: String,
+      required: [true, "Address is required"],
+      minlength: 5,
     },
     avatar: {
       type: String,
