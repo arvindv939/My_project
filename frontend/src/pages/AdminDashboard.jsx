@@ -31,6 +31,17 @@ const COLORS = [
   "#0088FE",
 ];
 
+// Add this new tab to the TABS array at the top
+const TABS = [
+  { id: "overview", label: "Overview", icon: "📊" },
+  { id: "sales", label: "Sales Analytics", icon: "💹" },
+  { id: "users", label: "User Management", icon: "👤" },
+  { id: "products", label: "Product Analytics", icon: "📈" },
+  { id: "orders", label: "Order Management", icon: "🚚" },
+  { id: "branches", label: "Branch Management", icon: "🏪" }, // Add this new tab
+  { id: "announcements", label: "Announcements", icon: "📢" }, // Add this new tab
+];
+
 function AdminDashboard() {
   const [analytics, setAnalytics] = useState({
     revenue: 0,
@@ -50,38 +61,133 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [timeRange, setTimeRange] = useState("7d");
 
+  // Add these new state variables
+  const [branches, setBranches] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [showBranchModal, setShowBranchModal] = useState(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [branchForm, setBranchForm] = useState({
+    name: "",
+    address: {
+      street: "",
+      city: "",
+      state: "",
+      zipCode: "",
+    },
+    contact: {
+      phone: "",
+      email: "",
+    },
+  });
+  const [announcementForm, setAnnouncementForm] = useState({
+    title: "",
+    message: "",
+    type: "info",
+    targetAudience: "all",
+    priority: "medium",
+    expiresAt: "",
+  });
+
+  // Add these fetch functions
+  const fetchBranches = async () => {
+    try {
+      const response = await API.get("/branches", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setBranches(response.data.branches || []);
+    } catch (error) {
+      console.error("Error fetching branches:", error);
+    }
+  };
+
+  const fetchAnnouncements = async () => {
+    try {
+      const response = await API.get("/announcements", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setAnnouncements(response.data.announcements || []);
+    } catch (error) {
+      console.error("Error fetching announcements:", error);
+    }
+  };
+
   useEffect(() => {
     fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 30000); // Refresh every 30 seconds
+    fetchBranches();
+    fetchAnnouncements();
+    const interval = setInterval(() => {
+      fetchAnalytics();
+      fetchBranches();
+      fetchAnnouncements();
+    }, 30000);
     return () => clearInterval(interval);
   }, [timeRange]);
+
+  // Add these handler functions
+  const handleCreateBranch = async (e) => {
+    e.preventDefault();
+    try {
+      await API.post("/branches", branchForm, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setShowBranchModal(false);
+      setBranchForm({
+        name: "",
+        address: { street: "", city: "", state: "", zipCode: "" },
+        contact: { phone: "", email: "" },
+      });
+      fetchBranches();
+    } catch (error) {
+      console.error("Error creating branch:", error);
+    }
+  };
+
+  const handleCreateAnnouncement = async (e) => {
+    e.preventDefault();
+    try {
+      await API.post("/announcements", announcementForm, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setShowAnnouncementModal(false);
+      setAnnouncementForm({
+        title: "",
+        message: "",
+        type: "info",
+        targetAudience: "all",
+        priority: "medium",
+        expiresAt: "",
+      });
+      fetchAnnouncements();
+    } catch (error) {
+      console.error("Error creating announcement:", error);
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      const [financialsRes, ordersRes, productsRes, usersRes] =
-        await Promise.all([
-          API.get("/admin/financials", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }),
-          API.get("/admin/orders", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }),
-          API.get("/admin/products", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }),
-          API.get("/admin/users", {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }),
-        ]);
+      const [financialsRes, ordersRes] = await Promise.all([
+        API.get("/admin/financials", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }),
+        API.get("/admin/orders", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }),
+        API.get("/admin/products", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }),
+        API.get("/admin/users", {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }),
+      ]);
 
       // Generate enhanced mock data for demonstration
       const enhancedData = {
@@ -107,6 +213,7 @@ function AdminDashboard() {
           { name: "Organic Milk", sales: 134, revenue: 8040 },
           { name: "Free Range Eggs", sales: 98, revenue: 4900 },
         ],
+        orders: ordersRes.data?.orders?.length || 0,
         recentOrders: ordersRes.data?.orders?.slice(0, 10) || [],
       };
 
@@ -246,41 +353,16 @@ function AdminDashboard() {
 
         {/* Navigation Tabs */}
         <div className="mb-8 flex flex-wrap gap-4">
-          <TabButton
-            id="overview"
-            label="Overview"
-            icon="📊"
-            isActive={activeTab === "overview"}
-            onClick={setActiveTab}
-          />
-          <TabButton
-            id="sales"
-            label="Sales Analytics"
-            icon="💹"
-            isActive={activeTab === "sales"}
-            onClick={setActiveTab}
-          />
-          <TabButton
-            id="users"
-            label="User Management"
-            icon="👤"
-            isActive={activeTab === "users"}
-            onClick={setActiveTab}
-          />
-          <TabButton
-            id="products"
-            label="Product Analytics"
-            icon="📈"
-            isActive={activeTab === "products"}
-            onClick={setActiveTab}
-          />
-          <TabButton
-            id="orders"
-            label="Order Management"
-            icon="🚚"
-            isActive={activeTab === "orders"}
-            onClick={setActiveTab}
-          />
+          {TABS.map((tab) => (
+            <TabButton
+              key={tab.id}
+              id={tab.id}
+              label={tab.label}
+              icon={tab.icon}
+              isActive={activeTab === tab.id}
+              onClick={setActiveTab}
+            />
+          ))}
         </div>
 
         {/* Tab Content */}
@@ -358,7 +440,7 @@ function AdminDashboard() {
                         outerRadius={100}
                         label
                       >
-                        {analytics.categoryAnalysis?.map((entry, index) => (
+                        {analytics.categoryAnalysis?.map((_entry, index) => (
                           <Cell
                             key={`cell-${index}`}
                             fill={COLORS[index % COLORS.length]}
@@ -557,7 +639,7 @@ function AdminDashboard() {
                         outerRadius={100}
                         label
                       >
-                        {analytics.categoryAnalysis?.map((entry, index) => (
+                        {analytics.categoryAnalysis?.map((_entry, index) => (
                           <Cell
                             key={`cell-${index}`}
                             fill={COLORS[index % COLORS.length]}
@@ -638,7 +720,8 @@ function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {analytics.recentOrders?.map((order, index) => (
+                    //
+                    {analytics.recentOrders?.map((order) => (
                       <tr
                         key={order._id}
                         className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200"
@@ -647,7 +730,9 @@ function AdminDashboard() {
                         <td className="py-3 px-4">
                           {order.customer?.name || "N/A"}
                         </td>
-                        <td className="py-3 px-4">₹{order.totalPrice || 0}</td>
+                        <td className="py-3 px-4">
+                          ₹{order.totalPrice || order.totalAmount || 0}
+                        </td>
                         <td className="py-3 px-4">
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -670,6 +755,510 @@ function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "branches" && (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold mb-4 text-gray-800">
+                    Branch Management
+                  </h3>
+                  <p className="text-gray-600">
+                    Manage store branches and assign shop owners
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowBranchModal(true)}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200"
+                >
+                  Add New Branch
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {branches.map((branch) => (
+                  <div
+                    key={branch._id}
+                    className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow duration-200"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="font-bold text-lg text-gray-800">
+                          {branch.name}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          Code: {branch.code}
+                        </p>
+                      </div>
+                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                        Active
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <p className="text-sm text-gray-600">
+                        📍 {branch.address.city}, {branch.address.state}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        📞 {branch.contact.phone}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        👥 {branch.shopOwners?.length || 0} Shop Owners
+                      </p>
+                    </div>
+
+                    <div className="flex space-x-2">
+                      <button className="flex-1 bg-blue-50 text-blue-600 py-2 px-3 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors">
+                        View Details
+                      </button>
+                      <button className="flex-1 bg-gray-50 text-gray-600 py-2 px-3 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
+                        Assign Owner
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "announcements" && (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold mb-4 text-gray-800">
+                    Announcements & Communications
+                  </h3>
+                  <p className="text-gray-600">
+                    Create and manage platform-wide announcements
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAnnouncementModal(true)}
+                  className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200"
+                >
+                  Create Announcement
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {announcements.map((announcement) => (
+                  <div
+                    key={announcement._id}
+                    className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <h4 className="font-bold text-lg text-gray-800">
+                            {announcement.title}
+                          </h4>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              announcement.type === "info"
+                                ? "bg-blue-100 text-blue-800"
+                                : announcement.type === "warning"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : announcement.type === "success"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-purple-100 text-purple-800"
+                            }`}
+                          >
+                            {announcement.type.toUpperCase()}
+                          </span>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              announcement.priority === "high"
+                                ? "bg-red-100 text-red-800"
+                                : announcement.priority === "medium"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {announcement.priority.toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="text-gray-600 mb-2">
+                          {announcement.message}
+                        </p>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                          <span>Target: {announcement.targetAudience}</span>
+                          <span>
+                            Created:{" "}
+                            {new Date(
+                              announcement.createdAt
+                            ).toLocaleDateString()}
+                          </span>
+                          {announcement.expiresAt && (
+                            <span>
+                              Expires:{" "}
+                              {new Date(
+                                announcement.expiresAt
+                              ).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg">
+                          ✏️
+                        </button>
+                        <button className="text-red-600 hover:bg-red-50 p-2 rounded-lg">
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Branch Modal */}
+          {showBranchModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="p-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">
+                      Add New Branch
+                    </h2>
+                    <button
+                      onClick={() => setShowBranchModal(false)}
+                      className="text-gray-500 hover:text-red-600 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateBranch} className="space-y-6">
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2">
+                        Branch Name*
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={branchForm.name}
+                        onChange={(e) =>
+                          setBranchForm({ ...branchForm, name: e.target.value })
+                        }
+                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter branch name"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          Street Address*
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={branchForm.address.street}
+                          onChange={(e) =>
+                            setBranchForm({
+                              ...branchForm,
+                              address: {
+                                ...branchForm.address,
+                                street: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Enter street address"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          City*
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={branchForm.address.city}
+                          onChange={(e) =>
+                            setBranchForm({
+                              ...branchForm,
+                              address: {
+                                ...branchForm.address,
+                                city: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Enter city"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          State*
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={branchForm.address.state}
+                          onChange={(e) =>
+                            setBranchForm({
+                              ...branchForm,
+                              address: {
+                                ...branchForm.address,
+                                state: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Enter state"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          ZIP Code*
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={branchForm.address.zipCode}
+                          onChange={(e) =>
+                            setBranchForm({
+                              ...branchForm,
+                              address: {
+                                ...branchForm.address,
+                                zipCode: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Enter ZIP code"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          Phone*
+                        </label>
+                        <input
+                          type="tel"
+                          required
+                          value={branchForm.contact.phone}
+                          onChange={(e) =>
+                            setBranchForm({
+                              ...branchForm,
+                              contact: {
+                                ...branchForm.contact,
+                                phone: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Enter phone number"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          value={branchForm.contact.email}
+                          onChange={(e) =>
+                            setBranchForm({
+                              ...branchForm,
+                              contact: {
+                                ...branchForm.contact,
+                                email: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Enter email address"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-4 pt-6">
+                      <button
+                        type="button"
+                        onClick={() => setShowBranchModal(false)}
+                        className="bg-gray-300 hover:bg-gray-400 px-6 py-3 rounded-xl font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold"
+                      >
+                        Create Branch
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Announcement Modal */}
+          {showAnnouncementModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="p-8">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">
+                      Create Announcement
+                    </h2>
+                    <button
+                      onClick={() => setShowAnnouncementModal(false)}
+                      className="text-gray-500 hover:text-red-600 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <form
+                    onSubmit={handleCreateAnnouncement}
+                    className="space-y-6"
+                  >
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2">
+                        Title*
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={announcementForm.title}
+                        onChange={(e) =>
+                          setAnnouncementForm({
+                            ...announcementForm,
+                            title: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter announcement title"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2">
+                        Message*
+                      </label>
+                      <textarea
+                        required
+                        rows={4}
+                        value={announcementForm.message}
+                        onChange={(e) =>
+                          setAnnouncementForm({
+                            ...announcementForm,
+                            message: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="Enter announcement message"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          Type
+                        </label>
+                        <select
+                          value={announcementForm.type}
+                          onChange={(e) =>
+                            setAnnouncementForm({
+                              ...announcementForm,
+                              type: e.target.value,
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        >
+                          <option value="info">Info</option>
+                          <option value="warning">Warning</option>
+                          <option value="success">Success</option>
+                          <option value="promotion">Promotion</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          Target Audience
+                        </label>
+                        <select
+                          value={announcementForm.targetAudience}
+                          onChange={(e) =>
+                            setAnnouncementForm({
+                              ...announcementForm,
+                              targetAudience: e.target.value,
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        >
+                          <option value="all">All Users</option>
+                          <option value="customers">Customers</option>
+                          <option value="shop_owners">Shop Owners</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 font-semibold mb-2">
+                          Priority
+                        </label>
+                        <select
+                          value={announcementForm.priority}
+                          onChange={(e) =>
+                            setAnnouncementForm({
+                              ...announcementForm,
+                              priority: e.target.value,
+                            })
+                          }
+                          className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2">
+                        Expires At (Optional)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={announcementForm.expiresAt}
+                        onChange={(e) =>
+                          setAnnouncementForm({
+                            ...announcementForm,
+                            expiresAt: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div className="flex justify-end space-x-4 pt-6">
+                      <button
+                        type="button"
+                        onClick={() => setShowAnnouncementModal(false)}
+                        className="bg-gray-300 hover:bg-gray-400 px-6 py-3 rounded-xl font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-semibold"
+                      >
+                        Create Announcement
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           )}

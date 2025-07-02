@@ -61,6 +61,9 @@ app.use("/api/orders", require("./routes/orders"));
 app.use("/api/shops", require("./routes/shops"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/promotions", require("./routes/promotions"));
+app.use("/api/branches", require("./routes/branches"));
+app.use("/api/bulk-orders", require("./routes/bulkOrders"));
+app.use("/api/announcements", require("./routes/announcements"));
 
 // Health check route
 app.get("/api/health", (req, res) => {
@@ -83,6 +86,9 @@ app.get("/", (req, res) => {
       shops: "/api/shops",
       admin: "/api/admin",
       promotions: "/api/promotions",
+      branches: "/api/branches",
+      bulkOrders: "/api/bulk-orders",
+      announcements: "/api/announcements",
     },
   });
 });
@@ -117,7 +123,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({
     message: "Internal server error",
     error:
-      process.env.NODE_ENV === "development"``````````````
+      process.env.NODE_ENV === "development"
         ? error.message
         : "Something went wrong",
   });
@@ -128,8 +134,10 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
   const interfaces = os.networkInterfaces();
-  const wifi = interfaces.Ethernet || interfaces["Wi-Fi"] || interfaces["WLAN"] || [];
-  const localIP = wifi.find((i) => i.family === "IPv4")?.address || "192.168.1.12";
+  const wifi =
+    interfaces.Ethernet || interfaces["Wi-Fi"] || interfaces["WLAN"] || [];
+  const localIP =
+    wifi.find((i) => i.family === "IPv4")?.address || "192.168.1.12";
 
   console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`📱 Accessible on your LAN at: http://${localIP}:${PORT}`);
@@ -137,4 +145,3 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 module.exports = app;
-

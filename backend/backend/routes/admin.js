@@ -199,4 +199,52 @@ router.get(
   }
 );
 
+// Get branch analytics
+router.get(
+  "/analytics/branches",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  async (req, res) => {
+    try {
+      const { getBranchAnalytics } = require("../controllers/adminController");
+      await getBranchAnalytics(req, res);
+    } catch (error) {
+      console.error("Get branch analytics error:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Get revenue analytics
+router.get(
+  "/analytics/revenue",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  async (req, res) => {
+    try {
+      const { getRevenueAnalytics } = require("../controllers/adminController");
+      await getRevenueAnalytics(req, res);
+    } catch (error) {
+      console.error("Get revenue analytics error:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Get user analytics
+router.get(
+  "/analytics/users",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  async (req, res) => {
+    try {
+      const { getUserAnalytics } = require("../controllers/adminController");
+      await getUserAnalytics(req, res);
+    } catch (error) {
+      console.error("Get user analytics error:", error);
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
 module.exports = router;

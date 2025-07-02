@@ -3,6 +3,7 @@ import type { Product } from '@/types';
 
 export interface OrderItem {
   product: string;
+  productId?: any;
   quantity: number;
   price: number;
 }
@@ -19,7 +20,9 @@ export interface Order {
   _id: string;
   customer: string;
   items: OrderItem[];
+  products?: OrderItem[];
   totalAmount: number;
+  total?: number;
   status: string;
   deliveryAddress: string;
   paymentMethod: string;
@@ -109,6 +112,15 @@ class OrderService {
       return response.data.order || response.data;
     } catch (error) {
       console.error('OrderService: Error updating order status:', error);
+      throw error;
+    }
+  }
+
+  async cancelOrder(id: string): Promise<void> {
+    try {
+      await API.put(`/orders/${id}/cancel`);
+    } catch (error) {
+      console.error('OrderService: Error cancelling order:', error);
       throw error;
     }
   }

@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
+const os = require("os");
 
 // Load environment variables
 dotenv.config();
@@ -54,12 +55,36 @@ const connectDB = async () => {
 connectDB();
 
 // Routes
+const userRoutes = require("./routes/user");
+const productRoutes = require("./routes/product");
+const categoryRoutes = require("./routes/category");
+const orderRoutes = require("./routes/order");
+const paymentRoutes = require("./routes/payment");
+const reviewRoutes = require("./routes/review");
+const cartRoutes = require("./routes/cart");
+
+// Add these imports at the top with other route imports
+const branchRoutes = require("./routes/branches");
+const bulkOrderRoutes = require("./routes/bulkOrders");
+const announcementRoutes = require("./routes/announcements");
+
 app.use("/api/auth", require("./routes/auth"));
-app.use("/api/products", require("./routes/products"));
-app.use("/api/orders", require("./routes/orders"));
+app.use("/api/products", productRoutes);
+app.use("/api/orders", orderRoutes);
 app.use("/api/shops", require("./routes/shops"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/promotions", require("./routes/promotions"));
+
+app.use("/api/users", userRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/cart", cartRoutes);
+
+// Add these route definitions after the existing routes
+app.use("/api/branches", branchRoutes);
+app.use("/api/bulk-orders", bulkOrderRoutes);
+app.use("/api/announcements", announcementRoutes);
 
 // Health check route
 app.get("/api/health", (req, res) => {
@@ -82,6 +107,14 @@ app.get("/", (req, res) => {
       shops: "/api/shops",
       admin: "/api/admin",
       promotions: "/api/promotions",
+      users: "/api/users",
+      categories: "/api/categories",
+      payments: "/api/payments",
+      reviews: "/api/reviews",
+      cart: "/api/cart",
+      branches: "/api/branches",
+      bulkOrders: "/api/bulk-orders",
+      announcements: "/api/announcements",
     },
   });
 });
@@ -106,8 +139,7 @@ app.use((error, req, res, next) => {
   ) {
     return res.status(400).json({
       message: "Invalid data format for React rendering",
-      error:
-        "Data contains objects that cannot be rendered as React children",
+      error: "Data contains objects that cannot be rendered as React children",
       details:
         "Ensure all data being rendered is properly formatted (strings, numbers, or arrays)",
       timestamp: new Date().toISOString(),
@@ -123,13 +155,19 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Start the server
+// ✅ Start the server and bind to all interfaces (0.0.0.0)
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 API available at http://localhost:${PORT}`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
+app.listen(PORT, "0.0.0.0", () => {
+  const interfaces = os.networkInterfaces();
+  const wifi =
+    interfaces.Ethernet || interfaces["Wi-Fi"] || interfaces["WLAN"] || [];
+  const localIP =
+    wifi.find((i) => i.family === "IPv4")?.address || "192.168.1.12";
+
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+  console.log(`📱 Accessible on your LAN at: http://${localIP}:${PORT}`);
+  console.log(`🏥 Health check: http://${localIP}:${PORT}/api/health`);
 });
 
 module.exports = app;

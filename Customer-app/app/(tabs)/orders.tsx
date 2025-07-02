@@ -20,9 +20,11 @@ import {
   XCircle,
   Truck,
   MapPin,
+  RotateCcw,
 } from 'lucide-react-native';
 import { orderService, type Order } from '@/services/orderService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCart } from '@/contexts/CartContext';
 import { formatIndianCurrency } from '@/utils/currency';
 
 const getStatusIcon = (status: string) => {
@@ -69,6 +71,7 @@ const formatStatus = (status: string) => {
 
 export default function OrdersScreen() {
   const { user } = useAuth();
+  const { addToCart } = useCart();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -107,18 +110,101 @@ export default function OrdersScreen() {
           try {
             await orderService.cancelOrder(orderId);
             fetchOrders();
-            Alert.alert('Success', 'Order cancelled successfully');
+            Alert.alert('✅ Success', 'Order cancelled successfully');
           } catch (error) {
-            Alert.alert('Error', 'Failed to cancel order');
+            Alert.alert('❌ Error', 'Failed to cancel order');
           }
         },
       },
     ]);
   };
 
-  const handleTrackOrder = (orderId: string) => {
-    // Navigate to order tracking screen
-    Alert.alert('Track Order', `Tracking order ${orderId}`);
+  const handleTrackOrder = (orderId: string, status: string) => {
+    const trackingSteps = [
+      { step: 'Order Placed', completed: true },
+      {
+        step: 'Confirmed',
+        completed: [
+          'confirmed',
+          'preparing',
+          'out_for_delivery',
+          'delivered',
+        ].includes(status.toLowerCase()),
+      },
+      {
+        step: 'Preparing',
+        completed: ['preparing', 'out_for_delivery', 'delivered'].includes(
+          status.toLowerCase()
+        ),
+      },
+      {
+        step: 'Out for Delivery',
+        completed: ['out_for_delivery', 'delivered'].includes(
+          status.toLowerCase()
+        ),
+      },
+      { step: 'Delivered', completed: status.toLowerCase() === 'delivered' },
+    ];
+
+    const trackingMessage = trackingSteps
+      .map((step) => `${step.completed ? '✅' : '⏳'} ${step.step}`)
+      .join('\n');
+
+    Alert.alert(
+      '📦 Order Tracking',
+      `Order #${orderId.slice(-8)}\n\n${trackingMessage}`,
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
+  const handleReorder = async (order: Order) => {
+    try {
+      // Add all items from the order back to cart
+      if (order.items && order.items.length > 0) {
+        for (const item of order.items) {
+          if (item.productId) {
+            addToCart(
+              {
+                id: item.productId._id || item.productId,
+                name: item.productId.name || `Product ${item.productId}`,
+                price: item.price,
+                image:
+                  item.productId.imageUrl ||
+                  'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300&h=300&fit=crop',
+                category: item.productId.category || 'General',
+                description: item.productId.description || '',
+                isOrganic: item.productId.isOrganic || false,
+                ecoFriendly: item.productId.ecoFriendly || false,
+                inStock: true,
+                rating: {
+                  average: item.productId.rating || 4.5,
+                  count: item.productId.reviews || 0,
+                },
+                unit: item.productId.unit || 'piece',
+                quantity: 0,
+              },
+              item.quantity
+            );
+          }
+        }
+        Alert.alert(
+          '🛒 Items Added to Cart',
+          `${order.items.length} items from your previous order have been added to cart.`,
+          [
+            { text: 'Continue Shopping', style: 'default' },
+            { text: 'View Cart', style: 'default' },
+          ]
+        );
+      } else {
+        Alert.alert(
+          '❌ Error',
+          'Unable to reorder - product information not available'
+        );
+      }
+    } catch (error) {
+      console.error('Error reordering:', error);
+      Alert.alert('❌ Error', 'Failed to add items to cart');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -145,7 +231,7 @@ export default function OrdersScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.header}>
+      <LinearGradient colors={['#27AE60', '#2ECC71']} style={styles.header}>
         <Text style={styles.headerTitle}>My Orders</Text>
         <Text style={styles.headerSubtitle}>
           Track your orders and delivery status
@@ -192,7 +278,7 @@ export default function OrdersScreen() {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#8B5CF6" />
+            <ActivityIndicator size="large" color="#27AE60" />
             <Text style={styles.loadingText}>Loading orders...</Text>
           </View>
         ) : displayOrders.length === 0 ? (
@@ -307,14 +393,18 @@ export default function OrdersScreen() {
                   {activeTab === 'active' && (
                     <TouchableOpacity
                       style={styles.trackButton}
-                      onPress={() => handleTrackOrder(order._id)}
+                      onPress={() => handleTrackOrder(order._id, order.status)}
                     >
                       <Text style={styles.trackButtonText}>Track</Text>
                     </TouchableOpacity>
                   )}
 
                   {activeTab === 'completed' && (
-                    <TouchableOpacity style={styles.reorderButton}>
+                    <TouchableOpacity
+                      style={styles.reorderButton}
+                      onPress={() => handleReorder(order)}
+                    >
+                      <RotateCcw size={16} color="#ffffff" />
                       <Text style={styles.reorderButtonText}>Reorder</Text>
                     </TouchableOpacity>
                   )}
@@ -370,7 +460,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#27AE60',
   },
   tabText: {
     fontSize: 14,
@@ -489,7 +579,7 @@ const styles = StyleSheet.create({
   },
   moreItems: {
     fontSize: 12,
-    color: '#8B5CF6',
+    color: '#27AE60',
     marginTop: 4,
   },
   deliveryInfo: {
@@ -544,7 +634,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#27AE60',
   },
   trackButtonText: {
     fontSize: 14,
@@ -552,10 +642,13 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   reorderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: '#27AE60',
+    gap: 6,
   },
   reorderButtonText: {
     fontSize: 14,

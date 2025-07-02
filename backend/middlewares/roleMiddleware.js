@@ -8,16 +8,18 @@ const roleMiddleware = (allowedRoles) => {
         });
       }
 
-      // Normalize role to handle both "ShopOwner" and "shop_owner"
-      let userRole = req.user.role;
-      if (userRole === "ShopOwner") {
-        userRole = "shop_owner";
-      }
+      // Normalize the user role to lowercase and underscore format
+      const normalizeRole = (role) => {
+        return role
+          .toLowerCase()
+          .replace(/\s+/g, "_")
+          .replace(/-/g, "_")
+          .trim();
+      };
 
-      // Check if user's role is in the allowed roles array
-      const normalizedAllowedRoles = allowedRoles.map((role) =>
-        role === "ShopOwner" ? "shop_owner" : role
-      );
+      const userRole = normalizeRole(req.user.role);
+
+      const normalizedAllowedRoles = allowedRoles.map(normalizeRole);
 
       if (!normalizedAllowedRoles.includes(userRole)) {
         return res.status(403).json({
@@ -28,8 +30,9 @@ const roleMiddleware = (allowedRoles) => {
         });
       }
 
-      // Update req.user.role to normalized version for consistency
+      // Attach normalized role back to request for consistent downstream use
       req.user.role = userRole;
+
       next();
     } catch (error) {
       console.error("Role middleware error:", error);

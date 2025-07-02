@@ -1,14 +1,24 @@
 const express = require("express");
+const authMiddleware = require("../middlewares/authMiddleware");
+const roleMiddleware = require("../middlewares/roleMiddleware");
+const {
+  getFinancials,
+  getAdminOrders,
+  getAdminProducts,
+  getAdminUsers,
+  getBranchAnalytics,
+  getRevenueAnalytics,
+  getUserAnalytics,
+} = require("../controllers/adminController");
+
 const User = require("../models/User");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const Shop = require("../models/Shop");
-const authMiddleware = require("../middlewares/authMiddleware");
-const roleMiddleware = require("../middlewares/roleMiddleware");
 
 const router = express.Router();
 
-// Get dashboard stats
+// Dashboard stats
 router.get(
   "/dashboard",
   authMiddleware,
@@ -25,7 +35,6 @@ router.get(
         status: "delivered",
       });
 
-      // Calculate total revenue
       const revenueResult = await Order.aggregate([
         { $match: { status: "delivered" } },
         { $group: { _id: null, total: { $sum: "$totalAmount" } } },
@@ -49,39 +58,45 @@ router.get(
   }
 );
 
-// Get all users
+// ✅ Analytics routes from controller
 router.get(
-  "/users",
+  "/financials",
   authMiddleware,
   roleMiddleware(["admin"]),
-  async (req, res) => {
-    try {
-      const { page = 1, limit = 10, role } = req.query;
+  getFinancials
+);
+router.get(
+  "/orders",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  getAdminOrders
+);
+router.get(
+  "/products",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  getAdminProducts
+);
+router.get("/users", authMiddleware, roleMiddleware(["admin"]), getAdminUsers);
 
-      const query = {};
-      if (role) {
-        query.role = role;
-      }
-
-      const users = await User.find(query)
-        .select("-password")
-        .limit(limit * 1)
-        .skip((page - 1) * limit)
-        .sort({ createdAt: -1 });
-
-      const total = await User.countDocuments(query);
-
-      res.json({
-        users,
-        totalPages: Math.ceil(total / limit),
-        currentPage: page,
-        total,
-      });
-    } catch (error) {
-      console.error("Get users error:", error);
-      res.status(500).json({ message: "Server error" });
-    }
-  }
+// ✅ Additional analytics
+router.get(
+  "/analytics/branches",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  getBranchAnalytics
+);
+router.get(
+  "/analytics/revenue",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  getRevenueAnalytics
+);
+router.get(
+  "/analytics/users",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  getUserAnalytics
 );
 
 // Update user role
@@ -92,17 +107,12 @@ router.put(
   async (req, res) => {
     try {
       const { role } = req.body;
-
       const user = await User.findByIdAndUpdate(
         req.params.id,
         { role },
         { new: true }
       ).select("-password");
-
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
+      if (!user) return res.status(404).json({ message: "User not found" });
       res.json(user);
     } catch (error) {
       console.error("Update user role error:", error);
@@ -119,11 +129,7 @@ router.delete(
   async (req, res) => {
     try {
       const user = await User.findByIdAndDelete(req.params.id);
-
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
+      if (!user) return res.status(404).json({ message: "User not found" });
       res.json({ message: "User deleted successfully" });
     } catch (error) {
       console.error("Delete user error:", error);
@@ -132,7 +138,7 @@ router.delete(
   }
 );
 
-// Get recent orders
+// Recent orders (limited)
 router.get(
   "/orders/recent",
   authMiddleware,
@@ -144,7 +150,6 @@ router.get(
         .populate("items.product", "name")
         .sort({ createdAt: -1 })
         .limit(10);
-
       res.json(orders);
     } catch (error) {
       console.error("Get recent orders error:", error);
@@ -153,7 +158,7 @@ router.get(
   }
 );
 
-// Get sales analytics
+// Sales chart data
 router.get(
   "/analytics/sales",
   authMiddleware,
@@ -161,8 +166,8 @@ router.get(
   async (req, res) => {
     try {
       const { period = "month" } = req.query;
-
       let groupBy;
+
       switch (period) {
         case "day":
           groupBy = {
@@ -173,8 +178,6 @@ router.get(
           groupBy = { $dateToString: { format: "%Y-%U", date: "$createdAt" } };
           break;
         case "month":
-          groupBy = { $dateToString: { format: "%Y-%m", date: "$createdAt" } };
-          break;
         default:
           groupBy = { $dateToString: { format: "%Y-%m", date: "$createdAt" } };
       }

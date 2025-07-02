@@ -112,6 +112,20 @@ const ShopOwnerDashboard = () => {
     minOrderValue: "",
   });
 
+  // Store last known order count for detecting new orders
+  const [lastOrderCount, setLastOrderCount] = useState(0);
+
+  // Polling for new orders every 30 seconds
+  useEffect(() => {
+    fetchOrders(); // Initial fetch
+
+    const interval = setInterval(() => {
+      fetchOrders(); // Fetch orders periodically
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval); // Cleanup
+  }, []);
+
   useEffect(() => {
     fetchProducts();
     fetchOrders();
@@ -173,8 +187,6 @@ const ShopOwnerDashboard = () => {
       const token = localStorage.getItem("token");
       if (!token) return;
 
-      console.log("Fetching orders for shop owner...");
-
       const res = await axios.get(
         "http://localhost:5000/api/orders/shop-owner",
         {
@@ -182,12 +194,18 @@ const ShopOwnerDashboard = () => {
         }
       );
 
-      console.log("Orders response:", res.data);
-      setOrders(res.data.orders || []);
+      const newOrders = res.data.orders || [];
+
+      // Only show toast if new order is detected
+      if (newOrders.length > lastOrderCount) {
+        showToastMsg("🛒 New order received!", "success");
+      }
+
+      setOrders(newOrders);
+      setLastOrderCount(newOrders.length);
     } catch (err) {
       console.error("Error loading orders:", err);
-      // Don't show error toast for orders as it's not critical
-      setOrders([]); // Set empty array as fallback
+      setOrders([]);
     }
   }
 
