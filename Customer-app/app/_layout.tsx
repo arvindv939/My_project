@@ -1,11 +1,17 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
+import { timingService } from '@/services/timingService'; // ✅ Import timingService
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,6 +28,9 @@ export default function RootLayout() {
     if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
+
+    // ✅ Initialize the timing service on app start
+    timingService.init();
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) {

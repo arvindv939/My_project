@@ -2,20 +2,19 @@ import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
-// Get IP dynamically from app config or fallback to static IP
-const baseURL =
-  Constants.expoConfig?.extra?.apiBaseUrl || 'http://192.168.1.12:5000/api'; // Update to your PC IP if needed
+// ✅ Replace with your current machine IP
+export const API_BASE_URL = 'http://192.168.1.12:5000/api';
 
-// Create axios instance
+// ✅ Create axios instance
 const API: AxiosInstance = axios.create({
-  baseURL,
+  baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// ✅ Add auth token to request headers
 API.interceptors.request.use(
   async (config) => {
     try {
@@ -42,7 +41,7 @@ API.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// ✅ Log and handle responses
 API.interceptors.response.use(
   (response: AxiosResponse) => {
     console.log('API Response:', {
@@ -56,10 +55,9 @@ API.interceptors.response.use(
     console.error('API Response Error:', error.response?.data || error.message);
 
     if (error.response?.status === 401) {
-      // Token expired or invalid
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('user');
-      // Optional: Add redirection to login screen here
+      // Optional: Navigate to login screen here
     }
 
     return Promise.reject(error);

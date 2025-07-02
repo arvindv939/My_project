@@ -29,10 +29,7 @@ router.get(
 
       console.log("Found orders:", orders.length);
 
-      res.json({
-        success: true,
-        orders,
-      });
+      res.json({ success: true, orders });
     } catch (error) {
       console.error("Error fetching shop owner orders:", error);
       res.status(500).json({
@@ -44,8 +41,8 @@ router.get(
   }
 );
 
-// ✅ Get orders for customer
-router.get("/my-orders", authMiddleware, async (req, res) => {
+// ✅ FIXED: Get orders for logged-in customer
+router.get("/customer", authMiddleware, async (req, res) => {
   try {
     const orders = await Order.find({ customerId: req.user.userId })
       .populate("items.productId", "name price imageUrl")
@@ -66,11 +63,8 @@ router.get("/my-orders", authMiddleware, async (req, res) => {
 router.get("/", authMiddleware, roleMiddleware(["admin"]), async (req, res) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
-
     const query = {};
-    if (status) {
-      query.status = status;
-    }
+    if (status) query.status = status;
 
     const orders = await Order.find(query)
       .populate("customerId", "name email")
@@ -106,26 +100,20 @@ router.get("/:id", authMiddleware, async (req, res) => {
       .populate("items.productId", "name price imageUrl");
 
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
+    // Check access permission
     if (
       req.user.role === "customer" &&
       order.customerId.toString() !== req.user.userId
     ) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied",
-      });
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
 
-    res.json({
-      success: true,
-      order,
-    });
+    res.json({ success: true, order });
   } catch (error) {
     console.error("Get order error:", error);
     res.status(500).json({
@@ -199,10 +187,9 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
     ];
 
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid status",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid status" });
     }
 
     const order = await Order.findByIdAndUpdate(
@@ -212,17 +199,12 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
     ).populate("customerId", "name email");
 
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
-    res.json({
-      success: true,
-      message: "Order status updated successfully",
-      order,
-    });
+    res.json({ success: true, message: "Order status updated", order });
   } catch (error) {
     console.error("Error updating order status:", error);
     res.status(500).json({
@@ -233,7 +215,7 @@ router.put("/:id/status", authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ Mark individual product in order as picked/unpicked
+// ✅ Update individual item as picked/unpicked
 router.put(
   "/:orderId/items/:productId",
   authMiddleware,
@@ -249,7 +231,6 @@ router.put(
       const item = order.items.find(
         (i) => i.productId.toString() === productId
       );
-
       if (!item)
         return res.status(404).json({ message: "Item not found in order" });
 

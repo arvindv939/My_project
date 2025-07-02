@@ -25,7 +25,9 @@ import {
 import { orderService, type Order } from '@/services/orderService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
+import { timingService } from '@/services/timingService';
 import { formatIndianCurrency } from '@/utils/currency';
+import LiveTimer from '@/components/LiveTimer';
 
 const getStatusIcon = (status: string) => {
   switch (status.toLowerCase()) {
@@ -75,10 +77,26 @@ export default function OrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [activeTab, setActiveTab] = useState<
+    'pending' | 'delivered' | 'cancelled'
+  >('pending');
+  const [timingServiceReady, setTimingServiceReady] = useState(false);
 
   useEffect(() => {
-    fetchOrders();
+    // Initialize timing service and fetch orders
+    const initializeServices = async () => {
+      try {
+        await timingService.init();
+        setTimingServiceReady(true);
+        await fetchOrders();
+      } catch (error) {
+        console.error('Error initializing services:', error);
+        setTimingServiceReady(true); // Set to true anyway to prevent infinite loading
+        await fetchOrders();
+      }
+    };
+
+    initializeServices();
   }, []);
 
   const fetchOrders = async () => {
@@ -218,15 +236,105 @@ export default function OrdersScreen() {
     });
   };
 
-  const activeOrders = orders.filter(
-    (order) => !['delivered', 'cancelled'].includes(order.status.toLowerCase())
+  const getItemCount = (order: Order) => {
+    return (
+      order.items?.reduce((total, item) => total + (item.quantity || 1), 0) || 0
+    );
+  };
+
+  const getEstimatedWaitTime = (itemCount: number) => {
+    if (itemCount < 5) return Math.floor(Math.random() * 3) + 3; // 3-5 minutes
+    if (itemCount < 10) return 10; // 10 minutes
+    if (itemCount < 20) return 15; // 15 minutes
+    return 20; // 20+ minutes
+  };
+
+  const getRemainingTime = (orderId: string) => {
+    if (!timingServiceReady) return 0;
+    try {
+      return timingService.getRemainingTime(orderId);
+    } catch (error) {
+      console.error('Error getting remaining time:', error);
+      return 0;
+    }
+  };
+
+  const formatTime = (minutes: number) => {
+    if (!timingServiceReady) return '0m';
+    try {
+      return timingService.formatTimeDisplay(minutes);
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return '0m';
+    }
+  };
+
+  const pendingOrders = orders.filter((order) =>
+    ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(
+      order.status.toLowerCase()
+    )
   );
 
-  const completedOrders = orders.filter((order) =>
-    ['delivered', 'cancelled'].includes(order.status.toLowerCase())
+  const deliveredOrders = orders.filter(
+    (order) => order.status.toLowerCase() === 'delivered'
   );
 
-  const displayOrders = activeTab === 'active' ? activeOrders : completedOrders;
+  const cancelledOrders = orders.filter(
+    (order) => order.status.toLowerCase() === 'cancelled'
+  );
+
+  const getDisplayOrders = () => {
+    switch (activeTab) {
+      case 'pending':
+        return pendingOrders;
+      case 'delivered':
+        return deliveredOrders;
+      case 'cancelled':
+        return cancelledOrders;
+      default:
+        return pendingOrders;
+    }
+  };
+
+  const displayOrders = getDisplayOrders();
+
+  const getTabTitle = (tab: string) => {
+    switch (tab) {
+      case 'pending':
+        return `Pending (${pendingOrders.length})`;
+      case 'delivered':
+        return `Delivered (${deliveredOrders.length})`;
+      case 'cancelled':
+        return `Cancelled (${cancelledOrders.length})`;
+      default:
+        return `Pending (${pendingOrders.length})`;
+    }
+  };
+
+  const getEmptyMessage = () => {
+    switch (activeTab) {
+      case 'pending':
+        return {
+          title: 'No pending orders',
+          subtitle: 'Your active orders will appear here',
+        };
+      case 'delivered':
+        return {
+          title: 'No delivered orders',
+          subtitle: 'Your delivered orders will appear here',
+        };
+      case 'cancelled':
+        return {
+          title: 'No cancelled orders',
+          subtitle: 'Your cancelled orders will appear here',
+        };
+      default:
+        return {
+          title: 'No orders',
+          subtitle: 'Your orders will appear here',
+        };
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -241,29 +349,42 @@ export default function OrdersScreen() {
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'active' && styles.activeTab]}
-          onPress={() => setActiveTab('active')}
+          style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
+          onPress={() => setActiveTab('pending')}
         >
           <Text
             style={[
               styles.tabText,
-              activeTab === 'active' && styles.activeTabText,
+              activeTab === 'pending' && styles.activeTabText,
             ]}
           >
-            Active ({activeOrders.length})
+            {getTabTitle('pending')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
-          onPress={() => setActiveTab('completed')}
+          style={[styles.tab, activeTab === 'delivered' && styles.activeTab]}
+          onPress={() => setActiveTab('delivered')}
         >
           <Text
             style={[
               styles.tabText,
-              activeTab === 'completed' && styles.activeTabText,
+              activeTab === 'delivered' && styles.activeTabText,
             ]}
           >
-            Completed ({completedOrders.length})
+            {getTabTitle('delivered')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'cancelled' && styles.activeTab]}
+          onPress={() => setActiveTab('cancelled')}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'cancelled' && styles.activeTabText,
+            ]}
+          >
+            {getTabTitle('cancelled')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -284,134 +405,143 @@ export default function OrdersScreen() {
         ) : displayOrders.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Package size={64} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>
-              {activeTab === 'active'
-                ? 'No active orders'
-                : 'No completed orders'}
-            </Text>
+            <Text style={styles.emptyTitle}>{getEmptyMessage().title}</Text>
             <Text style={styles.emptySubtitle}>
-              {activeTab === 'active'
-                ? 'Your active orders will appear here'
-                : 'Your order history will appear here'}
+              {getEmptyMessage().subtitle}
             </Text>
           </View>
         ) : (
-          displayOrders.map((order) => (
-            <View key={order._id} style={styles.orderCard}>
-              {/* Order Header */}
-              <View style={styles.orderHeader}>
-                <View style={styles.orderInfo}>
-                  <Text style={styles.orderId}>
-                    Order #{order._id.slice(-8)}
-                  </Text>
-                  <Text style={styles.orderDate}>
-                    {formatDate(order.createdAt)}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(order.status) + '20' },
-                  ]}
-                >
-                  {getStatusIcon(order.status)}
-                  <Text
-                    style={[
-                      styles.statusText,
-                      { color: getStatusColor(order.status) },
-                    ]}
-                  >
-                    {formatStatus(order.status)}
-                  </Text>
-                </View>
-              </View>
+          displayOrders.map((order) => {
+            const itemCount = getItemCount(order);
+            const remainingTime =
+              getRemainingTime(order._id) || getEstimatedWaitTime(itemCount);
 
-              {/* Order Items */}
-              <View style={styles.orderItems}>
-                <Text style={styles.itemsTitle}>
-                  {order.items?.length || order.products?.length || 0} item
-                  {(order.items?.length || order.products?.length || 0) > 1
-                    ? 's'
-                    : ''}
-                </Text>
-                {(order.items || []).slice(0, 2).map((item, index) => (
-                  <View key={index} style={styles.orderItem}>
-                    <Text style={styles.itemName}>
-                      {item.productId?.name || `Product ${index + 1}`}
+            return (
+              <View key={order._id} style={styles.orderCard}>
+                {/* Order Header */}
+                <View style={styles.orderHeader}>
+                  <View style={styles.orderInfo}>
+                    <Text style={styles.orderId}>
+                      Order #{order._id.slice(-8)}
                     </Text>
-                    <Text style={styles.itemDetails}>
-                      {item.quantity}x ₹{item.price}
+                    <Text style={styles.orderDate}>
+                      {formatDate(order.createdAt)}
                     </Text>
                   </View>
-                ))}
-                {(order.items?.length || order.products?.length || 0) > 2 && (
-                  <Text style={styles.moreItems}>
-                    +{(order.items?.length || order.products?.length || 0) - 2}{' '}
-                    more item
-                    {(order.items?.length || order.products?.length || 0) - 2 >
-                    1
-                      ? 's'
-                      : ''}
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: getStatusColor(order.status) + '20' },
+                    ]}
+                  >
+                    {getStatusIcon(order.status)}
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: getStatusColor(order.status) },
+                      ]}
+                    >
+                      {formatStatus(order.status)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Live Timer - Only for pending orders */}
+                {activeTab === 'pending' &&
+                  !['delivered', 'cancelled'].includes(
+                    order.status.toLowerCase()
+                  ) &&
+                  timingServiceReady && (
+                    <LiveTimer
+                      orderId={order._id}
+                      estimatedTime={remainingTime}
+                      status={order.status}
+                      itemCount={itemCount}
+                    />
+                  )}
+
+                {/* Order Items */}
+                <View style={styles.orderItems}>
+                  <Text style={styles.itemsTitle}>
+                    {itemCount} item{itemCount > 1 ? 's' : ''}
                   </Text>
+                  {(order.items || []).slice(0, 2).map((item, index) => (
+                    <View key={index} style={styles.orderItem}>
+                      <Text style={styles.itemName}>
+                        {item.productId?.name || `Product ${index + 1}`}
+                      </Text>
+                      <Text style={styles.itemDetails}>
+                        {item.quantity}x ₹{item.price}
+                      </Text>
+                    </View>
+                  ))}
+                  {itemCount > 2 && (
+                    <Text style={styles.moreItems}>
+                      +{itemCount - 2} more item{itemCount - 2 > 1 ? 's' : ''}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Delivery Info */}
+                {order.deliveryAddress && (
+                  <View style={styles.deliveryInfo}>
+                    <MapPin size={16} color="#6B7280" />
+                    <Text style={styles.deliveryAddress} numberOfLines={1}>
+                      {typeof order.deliveryAddress === 'string'
+                        ? order.deliveryAddress
+                        : JSON.stringify(order.deliveryAddress)}
+                    </Text>
+                  </View>
                 )}
-              </View>
 
-              {/* Delivery Info */}
-              {order.deliveryAddress && (
-                <View style={styles.deliveryInfo}>
-                  <MapPin size={16} color="#6B7280" />
-                  <Text style={styles.deliveryAddress} numberOfLines={1}>
-                    {typeof order.deliveryAddress === 'string'
-                      ? order.deliveryAddress
-                      : JSON.stringify(order.deliveryAddress)}
-                  </Text>
-                </View>
-              )}
+                {/* Order Footer */}
+                <View style={styles.orderFooter}>
+                  <View style={styles.totalContainer}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalAmount}>
+                      {formatIndianCurrency(
+                        order.totalAmount || order.total || 0
+                      )}
+                    </Text>
+                  </View>
 
-              {/* Order Footer */}
-              <View style={styles.orderFooter}>
-                <View style={styles.totalContainer}>
-                  <Text style={styles.totalLabel}>Total</Text>
-                  <Text style={styles.totalAmount}>
-                    {formatIndianCurrency(
-                      order.totalAmount || order.total || 0
-                    )}
-                  </Text>
-                </View>
+                  <View style={styles.orderActions}>
+                    {activeTab === 'pending' &&
+                      order.status.toLowerCase() === 'pending' && (
+                        <TouchableOpacity
+                          style={styles.cancelButton}
+                          onPress={() => handleCancelOrder(order._id)}
+                        >
+                          <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                      )}
 
-                <View style={styles.orderActions}>
-                  {activeTab === 'active' &&
-                    order.status.toLowerCase() === 'pending' && (
+                    {activeTab === 'pending' && (
                       <TouchableOpacity
-                        style={styles.cancelButton}
-                        onPress={() => handleCancelOrder(order._id)}
+                        style={styles.trackButton}
+                        onPress={() =>
+                          handleTrackOrder(order._id, order.status)
+                        }
                       >
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                        <Text style={styles.trackButtonText}>Track</Text>
                       </TouchableOpacity>
                     )}
 
-                  {activeTab === 'active' && (
-                    <TouchableOpacity
-                      style={styles.trackButton}
-                      onPress={() => handleTrackOrder(order._id, order.status)}
-                    >
-                      <Text style={styles.trackButtonText}>Track</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {activeTab === 'completed' && (
-                    <TouchableOpacity
-                      style={styles.reorderButton}
-                      onPress={() => handleReorder(order)}
-                    >
-                      <RotateCcw size={16} color="#ffffff" />
-                      <Text style={styles.reorderButtonText}>Reorder</Text>
-                    </TouchableOpacity>
-                  )}
+                    {(activeTab === 'delivered' ||
+                      activeTab === 'cancelled') && (
+                      <TouchableOpacity
+                        style={styles.reorderButton}
+                        onPress={() => handleReorder(order)}
+                      >
+                        <RotateCcw size={16} color="#ffffff" />
+                        <Text style={styles.reorderButtonText}>Reorder</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </SafeAreaView>
@@ -456,6 +586,7 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderRadius: 8,
   },
@@ -463,9 +594,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#27AE60',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#6B7280',
+    textAlign: 'center',
   },
   activeTabText: {
     color: '#ffffff',
