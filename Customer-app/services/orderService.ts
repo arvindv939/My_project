@@ -346,6 +346,28 @@ class OrderService {
       throw error;
     }
   }
+  async createOrder(orderData: any, token: string): Promise<Order> {
+    try {
+      const response = await fetch(`${this.baseUrl}/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(orderData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create order');
+      }
+
+      const newOrder: Order = await response.json();
+      return newOrder;
+    } catch (error) {
+      console.error('Error creating order:', error);
+      throw error;
+    }
+  }
 }
 
 export const orderService = new OrderService();

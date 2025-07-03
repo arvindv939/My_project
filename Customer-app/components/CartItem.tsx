@@ -14,6 +14,7 @@ interface CartItemProps {
   }
 }
 
+
 export function CartItem({ item }: CartItemProps) {
   const { updateQuantity, removeFromCart } = useCart()
 
