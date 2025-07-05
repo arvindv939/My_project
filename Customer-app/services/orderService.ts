@@ -1,4 +1,4 @@
-import { timingService } from './timingService';
+// services/orderService.ts
 
 export interface Product {
   _id: string;
@@ -22,9 +22,16 @@ export interface OrderItem {
 
 export interface Order {
   _id: string;
-  userId: string;
+  customerId?: string;
+  customer?: string;
+  userId?: string;
   items: Array<{
     productId: any;
+    quantity: number;
+    price: number;
+  }>;
+  products?: Array<{
+    product: any;
     quantity: number;
     price: number;
   }>;
@@ -32,299 +39,169 @@ export interface Order {
   total?: number;
   status: string;
   deliveryAddress?: string | object;
+  address?: string;
   createdAt: string;
   updatedAt?: string;
 }
 
 class OrderService {
   private baseUrl = 'http://localhost:5000/api';
-  private orders: Order[] = [];
 
-  constructor() {
-    this.initializeMockData();
-  }
-
-  private initializeMockData() {
-    // Create orders with proper chronological order
-    const now = Date.now();
-
-    this.orders = [
-      // Order #c6f5bb - OLDEST order (should have longest wait time in LIFO)
-      {
-        _id: 'c6f5bb',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod1',
-              name: 'cucumber',
-              imageUrl:
-                'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 25, // 25 items = 20min base time
-            price: 52,
-          },
-        ],
-        totalAmount: 1300,
-        status: 'pending',
-        deliveryAddress: '987 Cedar Ln, City',
-        createdAt: new Date(now - 60 * 60000).toISOString(), // 60 minutes ago (OLDEST)
-      },
-      // Order #fabc6d - Second oldest
-      {
-        _id: 'fabc6d',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod2',
-              name: 'raddish',
-              imageUrl:
-                'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 4, // 4 items = 3-5min base time
-            price: 80,
-          },
-        ],
-        totalAmount: 320,
-        status: 'confirmed',
-        deliveryAddress: '456 Oak Ave, City',
-        createdAt: new Date(now - 50 * 60000).toISOString(), // 50 minutes ago
-      },
-      // Order #b97e37 - NEWEST order (should have shortest wait time in LIFO)
-      {
-        _id: 'b97e37',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod1',
-              name: 'cucumber',
-              imageUrl:
-                'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 5, // 5 items = 10min base time
-            price: 50,
-          },
-        ],
-        totalAmount: 250,
-        status: 'confirmed',
-        deliveryAddress: '123 Main St, City',
-        createdAt: new Date(now - 40 * 60000).toISOString(), // 40 minutes ago (NEWEST)
-      },
-      // Delivered orders (don't affect queue)
-      {
-        _id: 'fabc19',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod1',
-              name: 'cucumber',
-              imageUrl:
-                'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 5,
-            price: 50,
-          },
-        ],
-        totalAmount: 250,
-        status: 'delivered',
-        deliveryAddress: '789 Pine St, City',
-        createdAt: new Date(now - 2 * 24 * 60 * 60000).toISOString(), // 2 days ago
-      },
-      {
-        _id: 'fabaf6',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod1',
-              name: 'cucumber',
-              imageUrl:
-                'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 1,
-            price: 50,
-          },
-        ],
-        totalAmount: 50,
-        status: 'delivered',
-        deliveryAddress: '321 Elm St, City',
-        createdAt: new Date(now - 3 * 24 * 60 * 60000).toISOString(), // 3 days ago
-      },
-      // Cancelled orders
-      {
-        _id: 'fab9ca',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod1',
-              name: 'cucumber',
-              imageUrl:
-                'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 10,
-            price: 50,
-          },
-        ],
-        totalAmount: 770,
-        status: 'cancelled',
-        deliveryAddress: '654 Maple Ave, City',
-        createdAt: new Date(now - 4 * 24 * 60 * 60000).toISOString(), // 4 days ago
-      },
-      {
-        _id: 'c6f738',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod1',
-              name: 'cucumber',
-              imageUrl:
-                'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 11,
-            price: 52,
-          },
-        ],
-        totalAmount: 520,
-        status: 'delivered',
-        deliveryAddress: '654 Maple Dr, City',
-        createdAt: new Date(now - 5 * 24 * 60 * 60000).toISOString(), // 5 days ago
-      },
-      {
-        _id: '233518',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod1',
-              name: 'cucumber',
-              imageUrl:
-                'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 9,
-            price: 50,
-          },
-        ],
-        totalAmount: 600,
-        status: 'delivered',
-        deliveryAddress: '147 Birch St, City',
-        createdAt: new Date(now - 6 * 24 * 60 * 60000).toISOString(), // 6 days ago
-      },
-      {
-        _id: '233372',
-        userId: 'user1',
-        items: [
-          {
-            productId: {
-              _id: 'prod1',
-              name: 'cucumber',
-              imageUrl:
-                'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=300&h=300&fit=crop',
-              category: 'Vegetables',
-              unit: 'piece',
-            },
-            quantity: 9,
-            price: 50,
-          },
-        ],
-        totalAmount: 600,
-        status: 'delivered',
-        deliveryAddress: '258 Spruce Ave, City',
-        createdAt: new Date(now - 7 * 24 * 60 * 60000).toISOString(), // 7 days ago
-      },
-    ];
-
-    this.initializeTimingService();
-  }
-
-  private async initializeTimingService() {
-    try {
-      // Clear existing queue first
-      await timingService.clearQueue();
-
-      // Add orders to timing service in chronological order (oldest first)
-      const sortedOrders = [...this.orders]
-        .filter(
-          (order) =>
-            order.status !== 'cancelled' &&
-            order.status !== 'delivered' &&
-            order.status !== 'completed'
-        )
-        .sort(
-          (a, b) =>
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-
-      console.log(
-        'Initializing timing service with orders:',
-        sortedOrders.map((o) => ({
-          id: o._id,
-          created: o.createdAt,
-          status: o.status,
-          items: o.items.reduce((sum, item) => sum + item.quantity, 0),
-        }))
-      );
-
-      for (const order of sortedOrders) {
-        const itemCount = order.items.reduce(
-          (total, item) => total + item.quantity,
-          0
-        );
-        const orderDate = new Date(order.createdAt);
-
-        await timingService.addOrderToQueue(order._id, itemCount, orderDate);
-
-        // Update status if not pending
-        if (order.status !== 'pending') {
-          await timingService.updateOrderStatus(order._id, order.status as any);
-        }
-      }
-    } catch (error) {
-      console.error('Error initializing timing service:', error);
+  // Helper method to get token
+  private getAuthToken(): string | null {
+    // Try to get token from localStorage first (for web compatibility)
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return localStorage.getItem('token');
     }
+    // For React Native, you might want to use AsyncStorage
+    // For now, return null and handle in the calling component
+    return null;
   }
 
-  async getOrders(): Promise<Order[]> {
+  // === Fetch orders for the current customer ===
+  async getOrders(token?: string): Promise<Order[]> {
     try {
-      // Return orders sorted by creation date (newest first for display)
-      return [...this.orders].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+      const authToken = token || this.getAuthToken();
+      if (!authToken) throw new Error('User is not authenticated');
+
+      const response = await fetch(`${this.baseUrl}/orders/customer`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        let errMsg = 'Failed to fetch orders';
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      const result = await response.json();
+      return result.orders || [];
     } catch (error) {
       console.error('Error fetching orders:', error);
       return [];
     }
   }
 
-  async cancelOrder(orderId: string): Promise<void> {
+  // === Fetch orders for the current shop owner ===
+  async getShopOwnerOrders(token?: string): Promise<Order[]> {
     try {
-      const orderIndex = this.orders.findIndex(
-        (order) => order._id === orderId
+      const authToken = token || this.getAuthToken();
+      if (!authToken) throw new Error('User is not authenticated');
+
+      const response = await fetch(`${this.baseUrl}/orders/shop-owner`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        let errMsg = 'Failed to fetch shop owner orders';
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      const result = await response.json();
+      return result.orders || [];
+    } catch (error) {
+      console.error('Error fetching shop owner orders:', error);
+      return [];
+    }
+  }
+
+  // === Create a new order ===
+  async createOrder(orderData: any, token?: string): Promise<Order> {
+    try {
+      const authToken = token || this.getAuthToken();
+      if (!authToken) throw new Error('User is not authenticated');
+
+      // Transform the order data to match backend expectations
+      const transformedOrderData = {
+        // Support both 'items' and 'products' field names
+        products: orderData.items || orderData.products,
+        items: orderData.items || orderData.products,
+        // Support both 'deliveryAddress' and 'address' field names
+        address: orderData.deliveryAddress || orderData.address,
+        deliveryAddress: orderData.deliveryAddress || orderData.address,
+        // Support both 'totalAmount' and 'total' field names
+        total: orderData.totalAmount || orderData.total,
+        totalAmount: orderData.totalAmount || orderData.total,
+        paymentMethod: orderData.paymentMethod || 'cash',
+        orderType: orderData.orderType || 'delivery',
+        scheduledDate: orderData.scheduledDate || new Date().toISOString(),
+        scheduledTime: orderData.scheduledTime || 'ASAP',
+        notes: orderData.notes || '',
+      };
+
+      console.log(
+        'OrderService: Sending transformed order data:',
+        transformedOrderData
       );
-      if (orderIndex !== -1) {
-        this.orders[orderIndex].status = 'cancelled';
-        await timingService.updateOrderStatus(orderId, 'cancelled');
+
+      const response = await fetch(`${this.baseUrl}/orders/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(transformedOrderData),
+      });
+
+      if (!response.ok) {
+        let errMsg = 'Failed to create order';
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.message || errMsg;
+          console.error('OrderService: Backend error response:', errJson);
+        } catch (parseError) {
+          console.error(
+            'OrderService: Failed to parse error response:',
+            parseError
+          );
+        }
+        throw new Error(errMsg);
+      }
+
+      const result = await response.json();
+      console.log('OrderService: Order created successfully:', result);
+      return result.order || result;
+    } catch (error) {
+      console.error('Error creating order:', error);
+      throw error;
+    }
+  }
+
+  // === Cancel an order ===
+  async cancelOrder(orderId: string, token?: string): Promise<void> {
+    try {
+      const authToken = token || this.getAuthToken();
+      if (!authToken) throw new Error('User is not authenticated');
+
+      const response = await fetch(`${this.baseUrl}/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+
+      if (!response.ok) {
+        let errMsg = 'Failed to cancel order';
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
       }
     } catch (error) {
       console.error('Error cancelling order:', error);
@@ -332,39 +209,35 @@ class OrderService {
     }
   }
 
-  async updateOrderStatus(orderId: string, status: string): Promise<void> {
+  // === Update order status ===
+  async updateOrderStatus(
+    orderId: string,
+    status: string,
+    token?: string
+  ): Promise<void> {
     try {
-      const orderIndex = this.orders.findIndex(
-        (order) => order._id === orderId
-      );
-      if (orderIndex !== -1) {
-        this.orders[orderIndex].status = status;
-        await timingService.updateOrderStatus(orderId, status as any);
-      }
-    } catch (error) {
-      console.error('Error updating order status:', error);
-      throw error;
-    }
-  }
-  async createOrder(orderData: any, token: string): Promise<Order> {
-    try {
-      const response = await fetch(`${this.baseUrl}/orders`, {
-        method: 'POST',
+      const authToken = token || this.getAuthToken();
+      if (!authToken) throw new Error('User is not authenticated');
+
+      const response = await fetch(`${this.baseUrl}/orders/${orderId}/status`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify(orderData),
+        body: JSON.stringify({ status }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create order');
+        let errMsg = 'Failed to update order status';
+        try {
+          const errJson = await response.json();
+          errMsg = errJson.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
       }
-
-      const newOrder: Order = await response.json();
-      return newOrder;
     } catch (error) {
-      console.error('Error creating order:', error);
+      console.error('Error updating order status:', error);
       throw error;
     }
   }

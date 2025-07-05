@@ -18,7 +18,7 @@ const orderItemSchema = new mongoose.Schema({
   },
   picked: {
     type: Boolean,
-    default: false, // ⬅️ Add this line
+    default: false,
   },
 });
 
@@ -72,10 +72,5 @@ const orderSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
-// Index for better query performance
-orderSchema.index({ customerId: 1 });
-orderSchema.index({ status: 1 });
-orderSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("Order", orderSchema);

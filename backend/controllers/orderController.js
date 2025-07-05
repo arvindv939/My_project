@@ -6,6 +6,13 @@ const authMiddleware = require("../middlewares/authMiddleware");
 
 // Create Order
 router.post("/create", authMiddleware, async (req, res) => {
+  console.log("OrderController: Received order creation request");
+  console.log(
+    "OrderController: Request body:",
+    JSON.stringify(req.body, null, 2)
+  );
+  console.log("OrderController: User ID:", req.user.id);
+
   const {
     products,
     items,
@@ -21,15 +28,33 @@ router.post("/create", authMiddleware, async (req, res) => {
   } = req.body;
 
   try {
+    // Get order items from either 'items' or 'products' field
     const orderItems = items || products;
 
     if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
+      console.log("OrderController: No order items provided");
       return res.status(400).json({
         success: false,
         message: "Order items are required",
       });
     }
 
+    // Get delivery address from either field
+    const orderAddress = deliveryAddress || address;
+
+    if (
+      !orderAddress ||
+      typeof orderAddress !== "string" ||
+      orderAddress.trim().length < 10
+    ) {
+      console.log("OrderController: Invalid delivery address:", orderAddress);
+      return res.status(400).json({
+        success: false,
+        message: "Complete delivery address is required",
+      });
+    }
+
+    // Calculate total if not provided
     let orderTotal = totalAmount || total;
     if (!orderTotal) {
       orderTotal = orderItems.reduce((sum, item) => {
@@ -37,12 +62,17 @@ router.post("/create", authMiddleware, async (req, res) => {
       }, 0);
     }
 
-    const orderAddress = deliveryAddress || address || "Not specified";
+    console.log("OrderController: Creating order with data:", {
+      customer: req.user.id,
+      items: orderItems.length,
+      total: orderTotal,
+      address: orderAddress,
+    });
 
     const order = new Order({
       customer: req.user.id,
       products: orderItems.map((item) => ({
-        product: item.product || item.id,
+        product: item.productId || item.product || item.id,
         quantity: item.quantity || 1,
         price: item.price || 0,
       })),
@@ -52,19 +82,24 @@ router.post("/create", authMiddleware, async (req, res) => {
       orderType: orderType || "delivery",
       paymentMethod: paymentMethod || "cash",
       notes: notes || "",
-      address: orderAddress,
+      address: orderAddress.trim(),
       status: "pending",
     });
 
     await order.save();
+    console.log("OrderController: Order saved successfully:", order._id);
 
-    // Generate QR
+    // Generate QR Code
     const qrData = `OrderID:${order._id}`;
     try {
       order.qrCode = await QRCode.toDataURL(qrData);
       await order.save();
+      console.log("OrderController: QR Code generated successfully");
     } catch (qrError) {
-      console.log("QR Code failed:", qrError.message);
+      console.log(
+        "OrderController: QR Code generation failed:",
+        qrError.message
+      );
     }
 
     res.status(201).json({
@@ -73,7 +108,7 @@ router.post("/create", authMiddleware, async (req, res) => {
       order,
     });
   } catch (error) {
-    console.error("Error creating order:", error);
+    console.error("OrderController: Error creating order:", error);
     res.status(500).json({
       success: false,
       message: "Server error while creating order",
@@ -87,7 +122,7 @@ router.get("/", authMiddleware, async (req, res) => {
   try {
     const orders = await Order.find()
       .populate("customer", "name email")
-      .populate("products.product", "name price unit"); // include unit
+      .populate("products.product", "name price unit");
     res.json(orders);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
@@ -95,12 +130,11 @@ router.get("/", authMiddleware, async (req, res) => {
 });
 
 // Get Shop Owner Orders
-// Get Orders for Shop Owner
 router.get("/shop-owner", authMiddleware, async (req, res) => {
   try {
     const orders = await Order.find()
-      .populate("customerId", "name")
-      .populate("items.productId", "name price unit");
+      .populate("customer", "name email")
+      .populate("products.product", "name price unit");
 
     res.status(200).json({
       success: true,

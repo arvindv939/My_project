@@ -18,6 +18,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
+  token: string | null; // <-- Add this!
 }
 
 interface RegisterData {
@@ -44,6 +45,7 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null); // <-- Add this!
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -53,12 +55,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const checkAuthStatus = async () => {
     try {
-      const token = await AsyncStorage.getItem('authToken');
+      const storedToken = await AsyncStorage.getItem('authToken');
       const userData = await AsyncStorage.getItem('userData');
-
-      if (token && userData) {
+      if (storedToken && userData) {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
+        setToken(storedToken); // <-- Set token here!
         setIsAuthenticated(true);
         console.log('User already authenticated:', parsedUser.email);
       }
@@ -80,10 +82,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.log('Login response:', response.data);
 
       if (response.data.token && response.data.user) {
-        const { token, user: userData } = response.data;
+        const { token: receivedToken, user: userData } = response.data;
 
         // Store token and user data
-        await AsyncStorage.setItem('authToken', token);
+        await AsyncStorage.setItem('authToken', receivedToken);
         await AsyncStorage.setItem('userData', JSON.stringify(userData));
 
         // Transform backend user data to match our User interface
@@ -101,6 +103,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         };
 
         setUser(transformedUser);
+        setToken(receivedToken); // <-- Set token after login!
         setIsAuthenticated(true);
         console.log('Login successful for:', transformedUser.email);
         return true;
@@ -140,9 +143,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         name: userData.name.trim(),
         email: userData.email.toLowerCase().trim(),
         password: userData.password,
-        phone: userData.phone.trim(), // ✅ added
-        address: userData.address.trim(), // ✅ added
-        role: 'Customer', // ✅ required by backend
+        phone: userData.phone.trim(),
+        address: userData.address.trim(),
+        role: 'Customer',
       };
 
       console.log('Registration payload:', registerPayload);
@@ -190,6 +193,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('userData');
       setUser(null);
+      setToken(null); // <-- Remove token on logout!
       setIsAuthenticated(false);
       console.log('User logged out successfully');
     } catch (error) {
@@ -206,6 +210,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         logout,
         isLoading,
         isAuthenticated,
+        token, // <-- Provide token in context!
       }}
     >
       {children}
