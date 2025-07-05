@@ -295,4 +295,27 @@ router.put(
   }
 );
 
+// Update payment status
+router.put("/:id/payment", authMiddleware, async (req, res) => {
+  try {
+    const { paymentMethod, paymentStatus } = req.body;
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    order.paymentMethod = paymentMethod || order.paymentMethod;
+    order.paymentStatus = paymentStatus || order.paymentStatus;
+
+    await order.save();
+    res.json({ success: true, message: "Payment updated", order });
+  } catch (error) {
+    console.error("Payment update error:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to update payment" });
+  }
+});
+
 module.exports = router;

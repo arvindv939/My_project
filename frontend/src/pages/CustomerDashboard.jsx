@@ -17,7 +17,6 @@ import {
 import API from "../services/api";
 import React from "react";
 
-
 const CATEGORIES = [
   "All",
   "Vegetables",

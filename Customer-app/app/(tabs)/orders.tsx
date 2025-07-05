@@ -21,6 +21,7 @@ import {
   Truck,
   MapPin,
   RotateCcw,
+  CreditCard,
 } from 'lucide-react-native';
 import { orderService, type Order } from '@/services/orderService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -87,7 +88,7 @@ export default function OrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'pending' | 'delivered' | 'cancelled'
+    'pending' | 'delivered' | 'cancelled' | 'payment'
   >('pending');
   const [timingServiceReady, setTimingServiceReady] = useState(false);
 
@@ -292,6 +293,10 @@ export default function OrdersScreen() {
     (order) => order.status.toLowerCase() === 'cancelled'
   );
 
+  const unpaidOrders = orders.filter(
+    (order) => order.paymentStatus === 'pending'
+  );
+
   const getDisplayOrders = () => {
     switch (activeTab) {
       case 'pending':
@@ -300,6 +305,8 @@ export default function OrdersScreen() {
         return deliveredOrders;
       case 'cancelled':
         return cancelledOrders;
+      case 'payment':
+        return unpaidOrders;
       default:
         return pendingOrders;
     }
@@ -315,6 +322,8 @@ export default function OrdersScreen() {
         return `Delivered (${deliveredOrders.length})`;
       case 'cancelled':
         return `Cancelled (${cancelledOrders.length})`;
+      case 'payment':
+        return `Payment (${unpaidOrders.length})`;
       default:
         return `Pending (${pendingOrders.length})`;
     }
@@ -337,11 +346,42 @@ export default function OrdersScreen() {
           title: 'No cancelled orders',
           subtitle: 'Your cancelled orders will appear here',
         };
+      case 'payment':
+        return {
+          title: 'No pending payments',
+          subtitle: 'Orders requiring payment will appear here',
+        };
       default:
         return {
           title: 'No orders',
           subtitle: 'Your orders will appear here',
         };
+    }
+  };
+
+  const handlePayment = async (orderId: string, method: string) => {
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/orders/${orderId}/payment`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            paymentMethod: method,
+            paymentStatus: 'paid',
+          }),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        Alert.alert('✅ Success', `Paid via ${method.toUpperCase()}`);
+        fetchOrders();
+      }
+    } catch (err) {
+      Alert.alert('❌ Error', 'Payment failed');
     }
   };
 
@@ -394,6 +434,19 @@ export default function OrdersScreen() {
             ]}
           >
             {getTabTitle('cancelled')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'payment' && styles.activeTab]}
+          onPress={() => setActiveTab('payment')}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'payment' && styles.activeTabText,
+            ]}
+          >
+            {getTabTitle('payment')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -545,6 +598,23 @@ export default function OrdersScreen() {
                         <RotateCcw size={16} color="#ffffff" />
                         <Text style={styles.reorderButtonText}>Reorder</Text>
                       </TouchableOpacity>
+                    )}
+
+                    {activeTab === 'payment' && (
+                      <View style={styles.paymentButtonsContainer}>
+                        {['cash', 'upi', 'card'].map((method) => (
+                          <TouchableOpacity
+                            key={method}
+                            style={styles.paymentButton}
+                            onPress={() => handlePayment(order._id, method)}
+                          >
+                            <CreditCard size={16} color="#ffffff" />
+                            <Text style={styles.paymentButtonText}>
+                              Pay with {method.toUpperCase()}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                     )}
                   </View>
                 </View>
@@ -792,6 +862,26 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   reorderButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  paymentButtonsContainer: {
+    flexDirection: 'column',
+    gap: 8,
+    width: '100%',
+  },
+  paymentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#27AE60',
+    gap: 6,
+  },
+  paymentButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',

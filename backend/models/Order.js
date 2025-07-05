@@ -26,7 +26,7 @@ const orderSchema = new mongoose.Schema(
   {
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "User", // This fixes the populate error
       required: true,
     },
     items: [orderItemSchema],
@@ -57,7 +57,7 @@ const orderSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       enum: ["cash", "card", "upi", "wallet"],
-      default: "cash",
+      default: "upi",
     },
     paymentStatus: {
       type: String,

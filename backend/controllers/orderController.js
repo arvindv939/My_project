@@ -100,7 +100,8 @@ router.get("/shop-owner", authMiddleware, async (req, res) => {
   try {
     const orders = await Order.find()
       .populate("customerId", "name")
-      .populate("items.productId", "name price unit");
+      .populate("items.productId", "name price unit")
+      .select("+paymentStatus +paymentMethod"); // Ensure payment fields are included
 
     res.status(200).json({
       success: true,

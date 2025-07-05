@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import API from "../services/api";
+import OrderTable from "../components/OrderTable";
 import {
   LineChart,
   Line,
@@ -31,15 +32,14 @@ const COLORS = [
   "#0088FE",
 ];
 
-// Add this new tab to the TABS array at the top
 const TABS = [
   { id: "overview", label: "Overview", icon: "📊" },
   { id: "sales", label: "Sales Analytics", icon: "💹" },
   { id: "users", label: "User Management", icon: "👤" },
   { id: "products", label: "Product Analytics", icon: "📈" },
   { id: "orders", label: "Order Management", icon: "🚚" },
-  { id: "branches", label: "Branch Management", icon: "🏪" }, // Add this new tab
-  { id: "announcements", label: "Announcements", icon: "📢" }, // Add this new tab
+  { id: "branches", label: "Branch Management", icon: "🏪" },
+  { id: "announcements", label: "Announcements", icon: "📢" },
 ];
 
 function AdminDashboard() {
@@ -47,21 +47,27 @@ function AdminDashboard() {
     revenue: 0,
     profit: 0,
     loss: 0,
-    orders: 0,
-    products: 0,
-    users: 0,
+    totalUsers: 0,
+    totalProducts: 0,
+    totalOrders: 0,
+    totalShops: 0,
+    pendingOrders: 0,
+    completedOrders: 0,
+    totalRevenue: 0,
     chartData: [],
     categoryAnalysis: [],
     monthlyData: [],
     userGrowth: [],
     topProducts: [],
     recentOrders: [],
+    usersByRole: [],
+    salesData: [],
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [timeRange, setTimeRange] = useState("7d");
 
-  // Add these new state variables
+  // Branch and announcement states
   const [branches, setBranches] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [showBranchModal, setShowBranchModal] = useState(false);
@@ -88,13 +94,150 @@ function AdminDashboard() {
     expiresAt: "",
   });
 
-  // Add these fetch functions
-  const fetchBranches = async () => {
+  // User management states
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showUserModal, setShowUserModal] = useState(false);
+
+  // Orders state for OrderTable
+  const [orders, setOrders] = useState([]);
+
+  // Helper function to convert time range to API format
+  const getTimeRangeParam = (range) => {
+    switch (range) {
+      case "24h":
+        return "1day";
+      case "7d":
+        return "7days";
+      case "30d":
+        return "30days";
+      case "90d":
+        return "90days";
+      default:
+        return "7days";
+    }
+  };
+
+  useEffect(() => {
+    fetchAllData();
+    const interval = setInterval(fetchAllData, 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, [timeRange]);
+
+  const fetchAllData = async () => {
     try {
-      const response = await API.get("/branches", {
+      setLoading(true);
+      await Promise.all([
+        fetchDashboardStats(),
+        fetchFinancials(),
+        fetchOrders(),
+        fetchProducts(),
+        fetchUsers(),
+        fetchBranches(),
+        fetchAnnouncements(),
+        fetchSalesAnalytics(),
+        fetchRevenueAnalytics(),
+        fetchUserAnalytics(),
+      ]);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchDashboardStats = async () => {
+    try {
+      const timeParam = getTimeRangeParam(timeRange);
+      const response = await API.get(`/admin/dashboard?period=${timeParam}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
-      setBranches(response.data.branches || []);
+      setAnalytics((prev) => ({
+        ...prev,
+        ...response.data,
+      }));
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+    }
+  };
+
+  const fetchFinancials = async () => {
+    try {
+      const timeParam = getTimeRangeParam(timeRange);
+      const response = await API.get(`/admin/financials?period=${timeParam}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setAnalytics((prev) => ({
+        ...prev,
+        revenue: response.data.revenue,
+        profit: response.data.profit,
+        loss: response.data.loss,
+      }));
+    } catch (error) {
+      console.error("Error fetching financials:", error);
+    }
+  };
+
+  const fetchOrders = async () => {
+    try {
+      const timeParam = getTimeRangeParam(timeRange);
+      const response = await API.get(`/admin/orders?period=${timeParam}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      const ordersData = response.data.orders || [];
+      setOrders(ordersData);
+      setAnalytics((prev) => ({
+        ...prev,
+        recentOrders: ordersData,
+        totalOrders: ordersData.length,
+      }));
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const response = await API.get("/admin/products", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setAnalytics((prev) => ({
+        ...prev,
+        categoryAnalysis: response.data.categoryAnalysis || [],
+        totalProducts: response.data.productsCount || 0,
+      }));
+    } catch (error) {
+      console.error("Error fetching products:", error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const response = await API.get("/admin/users", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setUsers(response.data.users || []);
+      setAnalytics((prev) => ({
+        ...prev,
+        totalUsers: response.data.users?.length || 0,
+        usersByRole: Object.entries(response.data.countByRole || {}).map(
+          ([role, count]) => ({
+            _id: role,
+            count: count,
+          })
+        ),
+      }));
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+  };
+
+  const fetchBranches = async () => {
+    try {
+      const response = await API.get("/admin/analytics/branches", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setBranches(response.data.branchAnalytics || []);
     } catch (error) {
       console.error("Error fetching branches:", error);
     }
@@ -111,19 +254,87 @@ function AdminDashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchAnalytics();
-    fetchBranches();
-    fetchAnnouncements();
-    const interval = setInterval(() => {
-      fetchAnalytics();
-      fetchBranches();
-      fetchAnnouncements();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [timeRange]);
+  const fetchSalesAnalytics = async () => {
+    try {
+      const timeParam = getTimeRangeParam(timeRange);
+      const response = await API.get(
+        `/admin/analytics/sales?period=${timeParam}`,
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+      setAnalytics((prev) => ({
+        ...prev,
+        salesData: response.data || [],
+      }));
+    } catch (error) {
+      console.error("Error fetching sales analytics:", error);
+    }
+  };
 
-  // Add these handler functions
+  const fetchRevenueAnalytics = async () => {
+    try {
+      const timeParam = getTimeRangeParam(timeRange);
+      const response = await API.get(
+        `/admin/analytics/revenue?period=${timeParam}`,
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+      setAnalytics((prev) => ({
+        ...prev,
+        monthlyData: response.data.revenueData || [],
+        totalRevenue: response.data.totalRevenue || 0,
+      }));
+    } catch (error) {
+      console.error("Error fetching revenue analytics:", error);
+    }
+  };
+
+  const fetchUserAnalytics = async () => {
+    try {
+      const timeParam = getTimeRangeParam(timeRange);
+      const response = await API.get(
+        `/admin/analytics/users?period=${timeParam}`,
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+      setAnalytics((prev) => ({
+        ...prev,
+        userGrowth: response.data.userAnalytics.userGrowth || [],
+      }));
+    } catch (error) {
+      console.error("Error fetching user analytics:", error);
+    }
+  };
+
+  // Order management functions for OrderTable
+  const handleOrderStatusUpdate = async (orderId, newStatus) => {
+    try {
+      await API.put(
+        `/orders/${orderId}/status`,
+        { status: newStatus },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+
+      // Update local orders state
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order._id === orderId ? { ...order, status: newStatus } : order
+        )
+      );
+
+      // Refresh orders data
+      fetchOrders();
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      alert("Error updating order status. Please try again.");
+    }
+  };
+
   const handleCreateBranch = async (e) => {
     e.preventDefault();
     try {
@@ -139,6 +350,7 @@ function AdminDashboard() {
       fetchBranches();
     } catch (error) {
       console.error("Error creating branch:", error);
+      alert("Error creating branch. Please try again.");
     }
   };
 
@@ -160,68 +372,38 @@ function AdminDashboard() {
       fetchAnnouncements();
     } catch (error) {
       console.error("Error creating announcement:", error);
+      alert("Error creating announcement. Please try again.");
     }
   };
 
-  const fetchAnalytics = async () => {
+  const handleUpdateUserRole = async (userId, newRole) => {
     try {
-      setLoading(true);
-      const [financialsRes, ordersRes] = await Promise.all([
-        API.get("/admin/financials", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }),
-        API.get("/admin/orders", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }),
-        API.get("/admin/products", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }),
-        API.get("/admin/users", {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }),
-      ]);
+      await API.put(
+        `/admin/users/${userId}/role`,
+        { role: newRole },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+      fetchUsers();
+      setShowUserModal(false);
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      alert("Error updating user role. Please try again.");
+    }
+  };
 
-      // Generate enhanced mock data for demonstration
-      const enhancedData = {
-        ...financialsRes.data,
-        monthlyData: [
-          { month: "Jan", revenue: 45000, orders: 120, users: 450 },
-          { month: "Feb", revenue: 52000, orders: 145, users: 520 },
-          { month: "Mar", revenue: 48000, orders: 135, users: 580 },
-          { month: "Apr", revenue: 61000, orders: 165, users: 640 },
-          { month: "May", revenue: 55000, orders: 150, users: 720 },
-          { month: "Jun", revenue: 67000, orders: 180, users: 800 },
-        ],
-        userGrowth: [
-          { week: "Week 1", customers: 120, shopOwners: 15 },
-          { week: "Week 2", customers: 145, shopOwners: 18 },
-          { week: "Week 3", customers: 160, shopOwners: 22 },
-          { week: "Week 4", customers: 180, shopOwners: 25 },
-        ],
-        topProducts: [
-          { name: "Organic Apples", sales: 245, revenue: 12250 },
-          { name: "Fresh Spinach", sales: 189, revenue: 5670 },
-          { name: "Whole Wheat Bread", sales: 156, revenue: 4680 },
-          { name: "Organic Milk", sales: 134, revenue: 8040 },
-          { name: "Free Range Eggs", sales: 98, revenue: 4900 },
-        ],
-        orders: ordersRes.data?.orders?.length || 0,
-        recentOrders: ordersRes.data?.orders?.slice(0, 10) || [],
-      };
-
-      setAnalytics(enhancedData);
-    } catch (err) {
-      console.error("Error fetching analytics:", err);
-    } finally {
-      setLoading(false);
+  const handleDeleteUser = async (userId) => {
+    if (window.confirm("Are you sure you want to delete this user?")) {
+      try {
+        await API.delete(`/admin/users/${userId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        fetchUsers();
+      } catch (error) {
+        console.error("Error deleting user:", error);
+        alert("Error deleting user. Please try again.");
+      }
     }
   };
 
@@ -319,7 +501,7 @@ function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
             title="Total Revenue"
-            value={`₹${analytics.revenue?.toLocaleString() || 0}`}
+            value={`₹${analytics.totalRevenue?.toLocaleString() || 0}`}
             change="+12.5%"
             icon="💰"
             color="from-green-500 to-emerald-600"
@@ -327,7 +509,7 @@ function AdminDashboard() {
           />
           <StatCard
             title="Total Orders"
-            value={analytics.orders || 0}
+            value={analytics.totalOrders || 0}
             change="+8.2%"
             icon="📦"
             color="from-blue-500 to-cyan-600"
@@ -335,7 +517,7 @@ function AdminDashboard() {
           />
           <StatCard
             title="Active Users"
-            value={analytics.users || 0}
+            value={analytics.totalUsers || 0}
             change="+15.3%"
             icon="👥"
             color="from-purple-500 to-pink-600"
@@ -343,7 +525,7 @@ function AdminDashboard() {
           />
           <StatCard
             title="Products"
-            value={analytics.products || 0}
+            value={analytics.totalProducts || 0}
             change="+5.7%"
             icon="🛍️"
             color="from-orange-500 to-red-600"
@@ -403,12 +585,12 @@ function AdminDashboard() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
+                    <XAxis dataKey="_id" />
                     <YAxis />
                     <Tooltip />
                     <Area
                       type="monotone"
-                      dataKey="revenue"
+                      dataKey="totalRevenue"
                       stroke="#8884d8"
                       fillOpacity={1}
                       fill="url(#colorRevenue)"
@@ -467,13 +649,11 @@ function AdminDashboard() {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={analytics.userGrowth}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="week" />
+                      <XAxis dataKey="_id" />
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Bar dataKey="customers" fill="#8884d8" />
-                      <Bar dataKey="shopOwners" fill="#82ca9d" />
-                      <Bar dataKey="workers" fill="#ffc658" />
+                      <Bar dataKey="newUsers" fill="#8884d8" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -495,77 +675,26 @@ function AdminDashboard() {
                   Sales Performance
                 </h3>
                 <ResponsiveContainer width="100%" height={400}>
-                  <LineChart data={analytics.chartData}>
+                  <LineChart data={analytics.salesData}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
+                    <XAxis dataKey="_id" />
                     <YAxis />
                     <Tooltip />
                     <Legend />
                     <Line
                       type="monotone"
-                      dataKey="revenue"
+                      dataKey="totalSales"
                       stroke="#8884d8"
                       strokeWidth={3}
                     />
                     <Line
                       type="monotone"
-                      dataKey="profit"
+                      dataKey="orderCount"
                       stroke="#82ca9d"
-                      strokeWidth={3}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="loss"
-                      stroke="#ff7300"
                       strokeWidth={3}
                     />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
-
-              {/* Top Products */}
-              <div
-                className="bg-white rounded-2xl p-6"
-                style={{
-                  boxShadow:
-                    "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                }}
-              >
-                <h3 className="text-xl font-bold mb-4 text-gray-800">
-                  Top Selling Products
-                </h3>
-                <div className="space-y-4">
-                  {analytics.topProducts?.map((product, index) => (
-                    <div
-                      key={product.name}
-                      className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl hover:shadow-md transition-shadow duration-200"
-                      style={{
-                        boxShadow:
-                          "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                      }}
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                          {index + 1}
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-800">
-                            {product.name}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            {product.sales} units sold
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-green-600">
-                          ₹{product.revenue.toLocaleString()}
-                        </p>
-                        <p className="text-sm text-gray-500">Revenue</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )}
@@ -581,37 +710,98 @@ function AdminDashboard() {
               <h3 className="text-xl font-bold mb-4 text-gray-800">
                 User Management
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
-                  <h4 className="text-lg font-semibold">Total Customers</h4>
-                  <p className="text-3xl font-bold">1,234</p>
-                  <p className="text-sm opacity-80">+12% this month</p>
-                </div>
-                <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-6 text-white">
-                  <h4 className="text-lg font-semibold">Shop Owners</h4>
-                  <p className="text-3xl font-bold">45</p>
-                  <p className="text-sm opacity-80">+3 new this week</p>
-                </div>
-                <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-6 text-white">
-                  <h4 className="text-lg font-semibold">Workers</h4>
-                  <p className="text-3xl font-bold">89</p>
-                  <p className="text-sm opacity-80">+5 active today</p>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                {analytics.usersByRole?.map((roleData, index) => (
+                  <div
+                    key={roleData._id}
+                    className={`bg-gradient-to-r ${
+                      COLORS[index % COLORS.length] === "#8884d8"
+                        ? "from-blue-500 to-blue-600"
+                        : COLORS[index % COLORS.length] === "#82ca9d"
+                        ? "from-green-500 to-green-600"
+                        : COLORS[index % COLORS.length] === "#ffc658"
+                        ? "from-yellow-500 to-yellow-600"
+                        : "from-purple-500 to-purple-600"
+                    } rounded-xl p-6 text-white`}
+                  >
+                    <h4 className="text-lg font-semibold">{roleData._id}s</h4>
+                    <p className="text-3xl font-bold">{roleData.count}</p>
+                  </div>
+                ))}
               </div>
 
-              {/* User Activity Chart */}
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={analytics.userGrowth}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="week" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="customers" fill="#3B82F6" />
-                  <Bar dataKey="shopOwners" fill="#10B981" />
-                  <Bar dataKey="workers" fill="#8B5CF6" />
-                </BarChart>
-              </ResponsiveContainer>
+              {/* Users Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Name
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Email
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Role
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Joined
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => (
+                      <tr
+                        key={user._id}
+                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200"
+                      >
+                        <td className="py-3 px-4">{user.name}</td>
+                        <td className="py-3 px-4">{user.email}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              user.role === "Admin"
+                                ? "bg-red-100 text-red-800"
+                                : user.role === "ShopOwner"
+                                ? "bg-blue-100 text-blue-800"
+                                : user.role === "Worker"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-gray-100 text-gray-800"
+                            }`}
+                          >
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowUserModal(true);
+                              }}
+                              className="text-blue-600 hover:bg-blue-50 p-1 rounded"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user._id)}
+                              className="text-red-600 hover:bg-red-50 p-1 rounded"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -660,26 +850,24 @@ function AdminDashboard() {
                   }}
                 >
                   <h3 className="text-xl font-bold mb-4 text-gray-800">
-                    Inventory Status
+                    Product Statistics
                   </h3>
                   <div className="space-y-4">
+                    <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                      <span className="font-medium text-blue-800">
+                        Total Products
+                      </span>
+                      <span className="font-bold text-blue-600">
+                        {analytics.totalProducts || 0}
+                      </span>
+                    </div>
                     <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                       <span className="font-medium text-green-800">
-                        In Stock
+                        Categories
                       </span>
-                      <span className="font-bold text-green-600">85%</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-                      <span className="font-medium text-yellow-800">
-                        Low Stock
+                      <span className="font-bold text-green-600">
+                        {analytics.categoryAnalysis?.length || 0}
                       </span>
-                      <span className="font-bold text-yellow-600">12%</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                      <span className="font-medium text-red-800">
-                        Out of Stock
-                      </span>
-                      <span className="font-bold text-red-600">3%</span>
                     </div>
                   </div>
                 </div>
@@ -696,66 +884,12 @@ function AdminDashboard() {
               }}
             >
               <h3 className="text-xl font-bold mb-4 text-gray-800">
-                Recent Orders
+                Order Management
               </h3>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                        Order ID
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                        Customer
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                        Amount
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                        Status
-                      </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                        Date
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    //
-                    {analytics.recentOrders?.map((order) => (
-                      <tr
-                        key={order._id}
-                        className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200"
-                      >
-                        <td className="py-3 px-4">#{order._id?.slice(-6)}</td>
-                        <td className="py-3 px-4">
-                          {order.customer?.name || "N/A"}
-                        </td>
-                        <td className="py-3 px-4">
-                          ₹{order.totalPrice || order.totalAmount || 0}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              order.status === "Completed"
-                                ? "bg-green-100 text-green-800"
-                                : order.status === "Processing"
-                                ? "bg-blue-100 text-blue-800"
-                                : order.status === "Pending"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {order.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          {new Date(order.createdAt).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <OrderTable
+                orders={orders}
+                handleOrderStatusUpdate={handleOrderStatusUpdate}
+              />
             </div>
           )}
 
@@ -800,13 +934,13 @@ function AdminDashboard() {
 
                     <div className="space-y-2 mb-4">
                       <p className="text-sm text-gray-600">
-                        📍 {branch.address.city}, {branch.address.state}
+                        👥 {branch.shopOwnersCount || 0} Shop Owners
                       </p>
                       <p className="text-sm text-gray-600">
-                        📞 {branch.contact.phone}
+                        📦 {branch.ordersCount || 0} Orders
                       </p>
                       <p className="text-sm text-gray-600">
-                        👥 {branch.shopOwners?.length || 0} Shop Owners
+                        💰 ₹{branch.revenue?.toLocaleString() || 0} Revenue
                       </p>
                     </div>
 
@@ -912,6 +1046,94 @@ function AdminDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* User Edit Modal */}
+          {showUserModal && selectedUser && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-gray-800">
+                      Edit User
+                    </h2>
+                    <button
+                      onClick={() => setShowUserModal(false)}
+                      className="text-gray-500 hover:text-red-600 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2">
+                        Name
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedUser.name}
+                        disabled
+                        className="w-full border border-gray-300 rounded-lg p-3 bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={selectedUser.email}
+                        disabled
+                        className="w-full border border-gray-300 rounded-lg p-3 bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-semibold mb-2">
+                        Role
+                      </label>
+                      <select
+                        value={selectedUser.role}
+                        onChange={(e) =>
+                          setSelectedUser({
+                            ...selectedUser,
+                            role: e.target.value,
+                          })
+                        }
+                        className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="Customer">Customer</option>
+                        <option value="ShopOwner">Shop Owner</option>
+                        <option value="Worker">Worker</option>
+                        <option value="Admin">Admin</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end space-x-4 mt-6">
+                    <button
+                      onClick={() => setShowUserModal(false)}
+                      className="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-lg font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() =>
+                        handleUpdateUserRole(
+                          selectedUser._id,
+                          selectedUser.role
+                        )
+                      }
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold"
+                    >
+                      Update Role
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
