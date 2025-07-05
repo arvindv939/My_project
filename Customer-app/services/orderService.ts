@@ -22,16 +22,9 @@ export interface OrderItem {
 
 export interface Order {
   _id: string;
-  customerId?: string;
-  customer?: string;
-  userId?: string;
+  userId: string;
   items: Array<{
     productId: any;
-    quantity: number;
-    price: number;
-  }>;
-  products?: Array<{
-    product: any;
     quantity: number;
     price: number;
   }>;
@@ -39,7 +32,6 @@ export interface Order {
   total?: number;
   status: string;
   deliveryAddress?: string | object;
-  address?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -47,31 +39,17 @@ export interface Order {
 class OrderService {
   private baseUrl = 'http://localhost:5000/api';
 
-  // Helper method to get token
-  private getAuthToken(): string | null {
-    // Try to get token from localStorage first (for web compatibility)
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return localStorage.getItem('token');
-    }
-    // For React Native, you might want to use AsyncStorage
-    // For now, return null and handle in the calling component
-    return null;
-  }
-
   // === Fetch orders for the current customer ===
-  async getOrders(token?: string): Promise<Order[]> {
+  async getOrders(token: string): Promise<Order[]> {
     try {
-      const authToken = token || this.getAuthToken();
-      if (!authToken) throw new Error('User is not authenticated');
-
+      if (!token) throw new Error('User is not authenticated');
       const response = await fetch(`${this.baseUrl}/orders/customer`, {
         headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
       });
-
       if (!response.ok) {
+        // Optionally: log backend error message for debugging
         let errMsg = 'Failed to fetch orders';
         try {
           const errJson = await response.json();
@@ -79,7 +57,6 @@ class OrderService {
         } catch {}
         throw new Error(errMsg);
       }
-
       const result = await response.json();
       return result.orders || [];
     } catch (error) {
@@ -89,18 +66,14 @@ class OrderService {
   }
 
   // === Fetch orders for the current shop owner ===
-  async getShopOwnerOrders(token?: string): Promise<Order[]> {
+  async getShopOwnerOrders(token: string): Promise<Order[]> {
     try {
-      const authToken = token || this.getAuthToken();
-      if (!authToken) throw new Error('User is not authenticated');
-
+      if (!token) throw new Error('User is not authenticated');
       const response = await fetch(`${this.baseUrl}/orders/shop-owner`, {
         headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
       });
-
       if (!response.ok) {
         let errMsg = 'Failed to fetch shop owner orders';
         try {
@@ -109,7 +82,6 @@ class OrderService {
         } catch {}
         throw new Error(errMsg);
       }
-
       const result = await response.json();
       return result.orders || [];
     } catch (error) {
@@ -118,42 +90,30 @@ class OrderService {
     }
   }
 
-  // === Create a new order ===
-  async createOrder(orderData: any, token?: string): Promise<Order> {
+  async createOrder(orderData: any, token: string): Promise<Order> {
     try {
-      const authToken = token || this.getAuthToken();
-      if (!authToken) throw new Error('User is not authenticated');
+      if (!token) throw new Error('User is not authenticated');
 
-      // Transform the order data to match backend expectations
-      const transformedOrderData = {
-        // Support both 'items' and 'products' field names
-        products: orderData.items || orderData.products,
-        items: orderData.items || orderData.products,
-        // Support both 'deliveryAddress' and 'address' field names
-        address: orderData.deliveryAddress || orderData.address,
-        deliveryAddress: orderData.deliveryAddress || orderData.address,
-        // Support both 'totalAmount' and 'total' field names
-        total: orderData.totalAmount || orderData.total,
-        totalAmount: orderData.totalAmount || orderData.total,
-        paymentMethod: orderData.paymentMethod || 'cash',
-        orderType: orderData.orderType || 'delivery',
-        scheduledDate: orderData.scheduledDate || new Date().toISOString(),
-        scheduledTime: orderData.scheduledTime || 'ASAP',
-        notes: orderData.notes || '',
-      };
+      // 🚨 Validate items before sending to backend
+      if (!orderData.items || !Array.isArray(orderData.items)) {
+        throw new Error('Order items are missing or invalid');
+      }
 
-      console.log(
-        'OrderService: Sending transformed order data:',
-        transformedOrderData
-      );
+      for (const item of orderData.items) {
+        if (!item.productId || typeof item.productId !== 'string') {
+          throw new Error(
+            `Invalid or missing productId in item: ${JSON.stringify(item)}`
+          );
+        }
+      }
 
-      const response = await fetch(`${this.baseUrl}/orders/create`, {
+      const response = await fetch(`${this.baseUrl}/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(transformedOrderData),
+        body: JSON.stringify(orderData),
       });
 
       if (!response.ok) {
@@ -161,19 +121,12 @@ class OrderService {
         try {
           const errJson = await response.json();
           errMsg = errJson.message || errMsg;
-          console.error('OrderService: Backend error response:', errJson);
-        } catch (parseError) {
-          console.error(
-            'OrderService: Failed to parse error response:',
-            parseError
-          );
-        }
+        } catch {}
         throw new Error(errMsg);
       }
 
-      const result = await response.json();
-      console.log('OrderService: Order created successfully:', result);
-      return result.order || result;
+      const { order } = await response.json();
+      return order;
     } catch (error) {
       console.error('Error creating order:', error);
       throw error;
@@ -181,20 +134,17 @@ class OrderService {
   }
 
   // === Cancel an order ===
-  async cancelOrder(orderId: string, token?: string): Promise<void> {
+  async cancelOrder(orderId: string, token: string): Promise<void> {
     try {
-      const authToken = token || this.getAuthToken();
-      if (!authToken) throw new Error('User is not authenticated');
-
+      if (!token) throw new Error('User is not authenticated');
       const response = await fetch(`${this.baseUrl}/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status: 'cancelled' }),
       });
-
       if (!response.ok) {
         let errMsg = 'Failed to cancel order';
         try {
@@ -213,21 +163,18 @@ class OrderService {
   async updateOrderStatus(
     orderId: string,
     status: string,
-    token?: string
+    token: string
   ): Promise<void> {
     try {
-      const authToken = token || this.getAuthToken();
-      if (!authToken) throw new Error('User is not authenticated');
-
+      if (!token) throw new Error('User is not authenticated');
       const response = await fetch(`${this.baseUrl}/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status }),
       });
-
       if (!response.ok) {
         let errMsg = 'Failed to update order status';
         try {

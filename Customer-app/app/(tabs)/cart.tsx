@@ -4,301 +4,495 @@ import { useState } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
-  TextInput,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useCart } from '../../contexts/CartContext';
-import { useAuth } from '../../contexts/AuthContext';
-import { orderService } from '../../services/orderService';
-import { router } from 'expo-router';
+import { MapPin, CreditCard, Truck } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useCart } from '@/contexts/CartContext';
+import { CartItem } from '@/components/CartItem';
+import { formatIndianCurrency } from '@/utils/currency';
+import { orderService } from '@/services/orderService';
+// 👇 Import your auth context here
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CartScreen() {
-  const { cartItems, updateQuantity, removeFromCart, clearCart, getCartTotal } =
-    useCart();
-  const { user, token } = useAuth();
-  const [deliveryAddress, setDeliveryAddress] = useState(
-    '123 Main Street, City, State 12345'
-  );
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
-  const [addressError, setAddressError] = useState('');
+  const { items, getTotalPrice, clearCart } = useCart();
+  // 👇 Get token from AuthContext
+  const { token } = useAuth();
 
-  const validateAddress = (address: string) => {
-    if (!address || address.trim().length < 10) {
-      setAddressError(
-        'Please enter a complete delivery address (minimum 10 characters)'
-      );
-      return false;
-    }
-    setAddressError('');
-    return true;
-  };
+  const [loading, setLoading] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState({
+    street: '123 Main Street',
+    city: 'City',
+    state: 'State',
+    zipCode: '12345',
+  });
 
-  const handlePlaceOrder = async () => {
-    console.log('Cart: Starting order placement process');
+  const totalPrice = getTotalPrice();
+  const deliveryFee = totalPrice > 500 ? 0 : 40;
+  const finalTotal = totalPrice + deliveryFee;
 
-    if (!user || !token) {
-      Alert.alert('Error', 'Please login to place an order');
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      Alert.alert('Error', 'Your cart is empty');
-      return;
-    }
-
-    if (!validateAddress(deliveryAddress)) {
-      return;
-    }
-
-    setIsPlacingOrder(true);
-
+  const handleCheckout = async () => {
     try {
-      const orderData = {
-        items: cartItems.map((item) => ({
-          productId: item._id,
+      if (items.length === 0) {
+        Alert.alert(
+          'Empty Cart',
+          'Please add items to your cart before checkout.'
+        );
+        return;
+      }
+
+      if (
+        !deliveryAddress.street.trim() ||
+        !deliveryAddress.city.trim() ||
+        !deliveryAddress.state.trim() ||
+        !deliveryAddress.zipCode.trim()
+      ) {
+        Alert.alert('Address Required', 'Please complete all address fields.');
+        return;
+      }
+
+      if (!token) {
+        Alert.alert('Login Required', 'Please log in to place your order.');
+        return;
+      }
+
+      setLoading(true);
+
+      const orderPayload = {
+        items: items.map((item) => ({
+          productId: item.id || item._id, // support both id and _id
           quantity: item.quantity,
           price: item.price,
         })),
-        deliveryAddress: deliveryAddress.trim(),
-        paymentMethod,
-        totalAmount: getCartTotal(),
-        orderType: 'delivery',
-        scheduledTime: 'ASAP',
-        notes: '',
+        totalAmount: finalTotal,
+        deliveryAddress,
+        paymentMethod: 'cash', // ✅ required by backend
       };
 
-      console.log('Cart: Sending order data:', orderData);
+      const order = await orderService.createOrder(orderPayload, token);
 
-      const order = await orderService.createOrder(orderData, token);
-
-      console.log('Cart: Order created successfully:', order);
-
-      Alert.alert('Success', 'Your order has been placed successfully!', [
-        {
-          text: 'OK',
-          onPress: () => {
-            clearCart();
-            router.push('/(tabs)/orders');
-          },
-        },
-      ]);
-    } catch (error) {
-      console.error('Cart: Error placing order:', error);
-      Alert.alert(
-        'Error',
-        error instanceof Error
-          ? error.message
-          : 'Failed to place order. Please try again.'
-      );
+      Alert.alert('Success', 'Order placed successfully!');
+      clearCart(); // optional
+    } catch (error: any) {
+      console.error('Error placing order:', error);
+      Alert.alert('Error', error.message || 'Failed to place order');
     } finally {
-      setIsPlacingOrder(false);
+      setLoading(false);
     }
   };
 
-  const renderCartItem = (item: any) => (
-    <View
-      key={item._id}
-      className="flex-row items-center bg-white p-4 mb-3 rounded-lg shadow-sm"
-    >
-      <Image
-        source={{ uri: item.imageUrl || '/placeholder.svg?height=60&width=60' }}
-        className="w-15 h-15 rounded-lg mr-4"
-        style={{ resizeMode: 'cover' }}
-      />
-      <View className="flex-1">
-        <Text className="text-lg font-semibold text-gray-800">{item.name}</Text>
-        <Text className="text-sm text-gray-600">₹{item.price}/kg</Text>
-        <View className="flex-row items-center mt-2">
-          <TouchableOpacity
-            onPress={() =>
-              updateQuantity(item._id, Math.max(0, item.quantity - 1))
-            }
-            className="w-8 h-8 bg-gray-200 rounded-full items-center justify-center"
-          >
-            <Ionicons name="remove" size={16} color="#666" />
-          </TouchableOpacity>
-          <Text className="mx-4 text-lg font-semibold">{item.quantity}</Text>
-          <TouchableOpacity
-            onPress={() => updateQuantity(item._id, item.quantity + 1)}
-            className="w-8 h-8 bg-green-500 rounded-full items-center justify-center"
-          >
-            <Ionicons name="add" size={16} color="white" />
-          </TouchableOpacity>
-        </View>
-      </View>
-      <View className="items-end">
-        <Text className="text-lg font-bold text-green-600">
-          ₹{item.price * item.quantity}
-        </Text>
-        <TouchableOpacity
-          onPress={() => removeFromCart(item._id)}
-          className="mt-2 p-1"
-        >
-          <Ionicons name="trash-outline" size={20} color="#ef4444" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  if (cartItems.length === 0) {
+  if (items.length === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
-        <View className="bg-green-500 px-4 py-6">
-          <Text className="text-white text-2xl font-bold">Shopping Cart</Text>
-          <Text className="text-green-100 mt-1">Your cart is empty</Text>
-        </View>
-        <View className="flex-1 items-center justify-center">
-          <Ionicons name="cart-outline" size={80} color="#ccc" />
-          <Text className="text-gray-500 text-lg mt-4">
-            No items in your cart
+      <SafeAreaView style={styles.container}>
+        <LinearGradient colors={['#27AE60', '#2ECC71']} style={styles.header}>
+          <Text style={styles.headerTitle}>Shopping Cart</Text>
+          <Text style={styles.headerSubtitle}>
+            Your eco-friendly shopping basket
           </Text>
-          <Text className="text-gray-400 text-center mt-2 px-8">
-            Browse our products and add items to your cart
+        </LinearGradient>
+
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>🛒</Text>
+          <Text style={styles.emptyTitle}>Your cart is empty</Text>
+          <Text style={styles.emptySubtitle}>
+            Add some eco-friendly products to get started!
           </Text>
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/')}
-            className="bg-green-500 px-6 py-3 rounded-lg mt-6"
-          >
-            <Text className="text-white font-semibold">Start Shopping</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <View className="bg-green-500 px-4 py-6">
-        <Text className="text-white text-2xl font-bold">Shopping Cart</Text>
-        <Text className="text-green-100 mt-1">
-          {cartItems.length} items in your basket
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <LinearGradient colors={['#27AE60', '#2ECC71']} style={styles.header}>
+        <Text style={styles.headerTitle}>Shopping Cart</Text>
+        <Text style={styles.headerSubtitle}>
+          {items.length} items in your basket
         </Text>
-      </View>
+      </LinearGradient>
 
-      <ScrollView className="flex-1 px-4 py-4">
-        {cartItems.map(renderCartItem)}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Cart Items */}
+        <View style={styles.itemsContainer}>
+          {items.map((item) => (
+            <CartItem key={item.id} item={item} />
+          ))}
+        </View>
 
         {/* Delivery Address */}
-        <View className="bg-white p-4 rounded-lg shadow-sm mb-4">
-          <View className="flex-row items-center mb-3">
-            <Ionicons name="location-outline" size={20} color="#10b981" />
-            <Text className="text-lg font-semibold ml-2">Delivery Address</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MapPin size={20} color="#27AE60" />
+            <Text style={styles.sectionTitle}>Delivery Address</Text>
           </View>
           <TextInput
-            value={deliveryAddress}
-            onChangeText={(text) => {
-              setDeliveryAddress(text);
-              if (addressError) validateAddress(text);
-            }}
-            placeholder="Enter your complete delivery address"
-            className={`border rounded-lg p-3 text-gray-700 ${
-              addressError ? 'border-red-500' : 'border-gray-300'
-            }`}
-            multiline
-            numberOfLines={3}
+            style={styles.addressInput}
+            value={deliveryAddress.street}
+            onChangeText={(text) =>
+              setDeliveryAddress({ ...deliveryAddress, street: text })
+            }
+            placeholder="Street address"
           />
-          {addressError ? (
-            <Text className="text-red-500 text-sm mt-1">{addressError}</Text>
-          ) : null}
+          <TextInput
+            style={styles.addressInput}
+            value={deliveryAddress.city}
+            onChangeText={(text) =>
+              setDeliveryAddress({ ...deliveryAddress, city: text })
+            }
+            placeholder="City"
+          />
+          <TextInput
+            style={styles.addressInput}
+            value={deliveryAddress.state}
+            onChangeText={(text) =>
+              setDeliveryAddress({ ...deliveryAddress, state: text })
+            }
+            placeholder="State"
+          />
+          <TextInput
+            style={styles.addressInput}
+            value={deliveryAddress.zipCode}
+            onChangeText={(text) =>
+              setDeliveryAddress({ ...deliveryAddress, zipCode: text })
+            }
+            placeholder="Zip Code"
+          />
         </View>
 
         {/* Payment Method */}
-        <View className="bg-white p-4 rounded-lg shadow-sm mb-4">
-          <View className="flex-row items-center mb-3">
-            <Ionicons name="card-outline" size={20} color="#10b981" />
-            <Text className="text-lg font-semibold ml-2">Payment Method</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <CreditCard size={20} color="#27AE60" />
+            <Text style={styles.sectionTitle}>Payment Method</Text>
           </View>
-          <TouchableOpacity className="flex-row items-center">
-            <Ionicons name="cash-outline" size={20} color="#f59e0b" />
-            <Text className="ml-2 text-gray-700">Cash on Delivery</Text>
-            <Text className="ml-auto text-sm text-gray-500">
+          <View style={styles.paymentOption}>
+            <Text style={styles.paymentText}>💰 Cash on Delivery</Text>
+            <Text style={styles.paymentSubtext}>
               Pay when your order arrives
             </Text>
-          </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Delivery Information */}
-        <View className="bg-white p-4 rounded-lg shadow-sm mb-4">
-          <View className="flex-row items-center mb-3">
-            <Ionicons name="time-outline" size={20} color="#10b981" />
-            <Text className="text-lg font-semibold ml-2">
-              Delivery Information
+        {/* Delivery Info */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Truck size={20} color="#27AE60" />
+            <Text style={styles.sectionTitle}>Delivery Information</Text>
+          </View>
+          <View style={styles.deliveryInfo}>
+            <Text style={styles.deliveryText}>🚚 Standard Delivery</Text>
+            <Text style={styles.deliverySubtext}>
+              Delivered within 2-3 hours
+            </Text>
+            <Text style={styles.deliveryNote}>
+              {deliveryFee === 0
+                ? 'Free delivery on orders above ₹500'
+                : `Delivery fee: ${formatIndianCurrency(deliveryFee)}`}
             </Text>
           </View>
-          <View className="flex-row items-center">
-            <Ionicons name="bicycle-outline" size={20} color="#f59e0b" />
-            <Text className="ml-2 text-gray-700">Standard Delivery</Text>
-          </View>
-          <Text className="text-sm text-gray-500 mt-1">
-            Delivered within 2-3 hours
-          </Text>
-          <Text className="text-xs text-green-600 mt-1">
-            Free delivery on orders above ₹500
-          </Text>
         </View>
 
         {/* Order Summary */}
-        <View className="bg-white p-4 rounded-lg shadow-sm mb-4">
-          <Text className="text-lg font-semibold mb-3">Order Summary</Text>
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-gray-600">
-              Subtotal ({cartItems.length} items)
-            </Text>
-            <Text className="font-semibold">₹{getCartTotal()}</Text>
-          </View>
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-gray-600">Delivery Fee</Text>
-            <Text className="font-semibold text-green-600">FREE</Text>
-          </View>
-          <View className="border-t border-gray-200 pt-2 mt-2">
-            <View className="flex-row justify-between">
-              <Text className="text-lg font-bold">Total Amount</Text>
-              <Text className="text-lg font-bold text-green-600">
-                ₹{getCartTotal()}
-              </Text>
-            </View>
-          </View>
-        </View>
+        <View style={styles.summaryContainer}>
+          <Text style={styles.summaryTitle}>Order Summary</Text>
 
-        {/* Eco-friendly message */}
-        <View className="bg-green-50 p-3 rounded-lg mb-4 flex-row items-center">
-          <Ionicons name="leaf-outline" size={20} color="#10b981" />
-          <Text className="text-green-700 text-sm ml-2 flex-1">
-            You're saving the environment with eco-friendly choices!
-          </Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              Subtotal ({items.length} items)
+            </Text>
+            <Text style={styles.summaryValue}>
+              {formatIndianCurrency(totalPrice)}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Delivery Fee</Text>
+            <Text
+              style={[
+                styles.summaryValue,
+                deliveryFee === 0 && styles.freeDelivery,
+              ]}
+            >
+              {deliveryFee === 0 ? 'FREE' : formatIndianCurrency(deliveryFee)}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalValue}>
+              {formatIndianCurrency(finalTotal)}
+            </Text>
+          </View>
+
+          <View style={styles.savingsContainer}>
+            <Text style={styles.savingsText}>
+              🌱 You're saving the environment with eco-friendly choices!
+            </Text>
+          </View>
         </View>
       </ScrollView>
 
-      {/* Place Order Button */}
-      <View className="p-4 bg-white border-t border-gray-200">
+      {/* Checkout Button */}
+      <View style={styles.checkoutContainer}>
         <TouchableOpacity
-          onPress={handlePlaceOrder}
-          disabled={isPlacingOrder || !!addressError}
-          className={`py-4 rounded-lg items-center ${
-            isPlacingOrder || addressError ? 'bg-gray-400' : 'bg-green-500'
-          }`}
+          style={[
+            styles.checkoutButton,
+            loading && styles.checkoutButtonDisabled,
+          ]}
+          onPress={handleCheckout}
+          disabled={loading}
         >
-          {isPlacingOrder ? (
-            <View className="flex-row items-center">
-              <ActivityIndicator color="white" size="small" />
-              <Text className="text-white font-bold text-lg ml-2">
-                Placing Order...
-              </Text>
-            </View>
-          ) : (
-            <Text className="text-white font-bold text-lg">
-              Place Order ₹{getCartTotal()}
-            </Text>
-          )}
+          <LinearGradient
+            colors={['#27AE60', '#2ECC71']}
+            style={styles.checkoutGradient}
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <>
+                <Text style={styles.checkoutText}>Place Order</Text>
+                <Text style={styles.checkoutAmount}>
+                  {formatIndianCurrency(finalTotal)}
+                </Text>
+              </>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontFamily: 'Inter-Bold',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontFamily: 'Inter-Regular',
+  },
+  content: {
+    flex: 1,
+  },
+  itemsContainer: {
+    padding: 20,
+    gap: 16,
+  },
+  section: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  addressInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#1F2937',
+    textAlignVertical: 'top',
+  },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  paymentText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  paymentSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'Inter-Regular',
+  },
+  deliveryInfo: {
+    gap: 4,
+  },
+  deliveryText: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  deliverySubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'Inter-Regular',
+  },
+  deliveryNote: {
+    fontSize: 12,
+    color: '#27AE60',
+    fontFamily: 'Inter-Medium',
+    marginTop: 4,
+  },
+  summaryContainer: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  freeDelivery: {
+    color: '#27AE60',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 12,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    color: '#27AE60',
+  },
+  savingsContainer: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  savingsText: {
+    fontSize: 12,
+    color: '#15803D',
+    fontFamily: 'Inter-Medium',
+    textAlign: 'center',
+  },
+  checkoutContainer: {
+    padding: 20,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  checkoutButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  checkoutButtonDisabled: {
+    opacity: 0.6,
+  },
+  checkoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  checkoutText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#ffffff',
+  },
+  checkoutAmount: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#ffffff',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+});
