@@ -24,10 +24,10 @@ import {
 const categories = [
   { id: 'Fruits', name: 'Fresh Fruits', icon: '🍎', color: '#EF4444' },
   { id: 'Vegetables', name: 'Vegetables', icon: '🥬', color: '#10B981' },
-  { id: 'Dairy', name: 'Dairy & Eggs', icon: '🥛', color: '#3B82F6' },
+  { id: 'Dairy', name: 'Dairy & Eggs', icon: '🥛', color: '#27AE60' },
   { id: 'Bakery', name: 'Bakery', icon: '🍞', color: '#F59E0B' },
   { id: 'Snacks', name: 'Snacks', icon: '🍿', color: '#16A34A' },
-  { id: 'Beverages', name: 'Beverages', icon: '🧃', color: '#8B5CF6' },
+  { id: 'Beverages', name: 'Beverages', icon: '🧃', color: '#2ECC71' },
   { id: 'Staples', name: 'Staples', icon: '🌾', color: '#F59E0B' },
   { id: 'Household', name: 'Household', icon: '🧽', color: '#6B7280' },
   { id: 'Personal Care', name: 'Personal Care', icon: '🧴', color: '#EC4899' },
@@ -97,7 +97,7 @@ export default function CategoriesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.header}>
+      <LinearGradient colors={['#27AE60', '#2ECC71']} style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Browse Products</Text>
           <Text style={styles.headerSubtitle}>
@@ -193,7 +193,7 @@ export default function CategoriesScreen() {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#8B5CF6" />
+            <ActivityIndicator size="large" color="#27AE60" />
             <Text style={styles.loadingText}>Loading products...</Text>
           </View>
         ) : products.length === 0 ? (
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
   },
   searchButton: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#27AE60',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -325,8 +325,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   categoryCardActive: {
-    backgroundColor: '#EDE9FE',
-    borderColor: '#8B5CF6',
+    backgroundColor: '#D1FAE5',
+    borderColor: '#27AE60',
   },
   categoryIcon: {
     fontSize: 24,
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   categoryNameActive: {
-    color: '#8B5CF6',
+    color: '#27AE60',
   },
   productsContainer: {
     flex: 1,

@@ -1,175 +1,426 @@
-const express = require("express");
-const router = express.Router();
 const Order = require("../models/Order");
-const QRCode = require("qrcode");
-const authMiddleware = require("../middlewares/authMiddleware");
+const Product = require("../models/Product");
+const User = require("../models/User");
 
-// Create Order
-router.post("/create", authMiddleware, async (req, res) => {
-  const {
-    products,
-    items,
-    scheduledDate,
-    scheduledTime,
-    orderType,
-    paymentMethod,
-    notes,
-    address,
-    total,
-    totalAmount,
-    deliveryAddress,
-  } = req.body;
-
+// Create a new order
+exports.createOrder = async (req, res) => {
   try {
-    const orderItems = items || products;
+    const {
+      products,
+      total,
+      paymentMethod,
+      orderType,
+      scheduledDate,
+      scheduledTime,
+      address,
+      notes,
+    } = req.body;
+    const customerId = req.user.id;
 
-    if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
+    // Validate required fields
+    if (!products || !Array.isArray(products) || products.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Order items are required",
+        message: "Products are required and must be a non-empty array",
       });
     }
 
-    let orderTotal = totalAmount || total;
-    if (!orderTotal) {
-      orderTotal = orderItems.reduce((sum, item) => {
-        return sum + (item.price || 0) * (item.quantity || 1);
-      }, 0);
+    if (!total || total <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Total amount must be greater than 0",
+      });
     }
 
-    const orderAddress = deliveryAddress || address || "Not specified";
+    if (!address || address.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Delivery address is required",
+      });
+    }
 
+    // Validate products and calculate total
+    let calculatedTotal = 0;
+    const orderProducts = [];
+
+    for (const item of products) {
+      if (!item.product || !item.quantity || item.quantity <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Each product must have a valid product ID and quantity",
+        });
+      }
+
+      const product = await Product.findById(item.product);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: `Product with ID ${item.product} not found`,
+        });
+      }
+
+      // Check stock availability
+      if (product.stock < item.quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`,
+        });
+      }
+
+      const itemTotal = product.price * item.quantity;
+      calculatedTotal += itemTotal;
+
+      orderProducts.push({
+        product: product._id,
+        quantity: item.quantity,
+        price: product.price,
+      });
+
+      // Update product stock
+      product.stock -= item.quantity;
+      await product.save();
+    }
+
+    // Verify total matches calculated total (with small tolerance for floating point)
+    if (Math.abs(calculatedTotal - total) > 0.01) {
+      return res.status(400).json({
+        success: false,
+        message: `Total mismatch. Expected: ${calculatedTotal}, Received: ${total}`,
+      });
+    }
+
+    // Create the order
     const order = new Order({
-      customer: req.user.id,
-      products: orderItems.map((item) => ({
-        product: item.product || item.id,
-        quantity: item.quantity || 1,
-        price: item.price || 0,
-      })),
-      total: orderTotal,
+      customer: customerId,
+      products: orderProducts,
+      total: calculatedTotal,
+      totalAmount: calculatedTotal,
+      paymentMethod: paymentMethod || "cash",
+      paymentStatus: paymentMethod === "cash" ? "pending" : "paid",
+      orderType: orderType || "delivery",
       scheduledDate: scheduledDate || new Date(),
       scheduledTime: scheduledTime || "ASAP",
-      orderType: orderType || "delivery",
-      paymentMethod: paymentMethod || "cash",
+      address: address.trim(),
+      deliveryAddress: address.trim(),
       notes: notes || "",
-      address: orderAddress,
       status: "pending",
     });
 
     await order.save();
 
-    // Generate QR
-    const qrData = `OrderID:${order._id}`;
-    try {
-      order.qrCode = await QRCode.toDataURL(qrData);
-      await order.save();
-    } catch (qrError) {
-      console.log("QR Code failed:", qrError.message);
-    }
+    // Populate the order with product details
+    const populatedOrder = await Order.findById(order._id)
+      .populate("customer", "name email phone")
+      .populate("products.product", "name category imageUrl");
 
     res.status(201).json({
       success: true,
-      message: "Order placed successfully",
-      order,
+      message: "Order created successfully",
+      order: populatedOrder,
     });
   } catch (error) {
     console.error("Error creating order:", error);
     res.status(500).json({
       success: false,
-      message: "Server error while creating order",
+      message: "Failed to create order",
       error: error.message,
     });
   }
-});
+};
 
-// Get All Orders (Admin)
-router.get("/", authMiddleware, async (req, res) => {
+// Get orders for a customer
+exports.getCustomerOrders = async (req, res) => {
   try {
-    const orders = await Order.find()
-      .populate("customer", "name email")
-      .populate("products.product", "name price unit"); // include unit
-    res.json(orders);
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-});
+    const customerId = req.user.id;
+    const { status, limit = 50, page = 1 } = req.query;
 
-// Get Shop Owner Orders
-// Get Orders for Shop Owner
-router.get("/shop-owner", authMiddleware, async (req, res) => {
-  try {
-    const orders = await Order.find()
-      .populate("customerId", "name")
-      .populate("items.productId", "name price unit")
-      .select("+paymentStatus +paymentMethod"); // Ensure payment fields are included
+    const query = { customer: customerId };
+    if (status) {
+      query.status = status;
+    }
 
-    res.status(200).json({
+    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+
+    const orders = await Order.find(query)
+      .populate("products.product", "name category imageUrl")
+      .sort({ createdAt: -1 })
+      .limit(Number.parseInt(limit))
+      .skip(skip);
+
+    const totalOrders = await Order.countDocuments(query);
+
+    res.json({
       success: true,
       orders,
+      pagination: {
+        currentPage: Number.parseInt(page),
+        totalPages: Math.ceil(totalOrders / Number.parseInt(limit)),
+        totalOrders,
+        hasMore: skip + orders.length < totalOrders,
+      },
     });
   } catch (error) {
-    console.error("Error fetching shop owner orders:", error.message);
+    console.error("Error fetching customer orders:", error);
     res.status(500).json({
       success: false,
-      message: "Server error while fetching orders",
+      message: "Failed to fetch orders",
+      error: error.message,
     });
   }
-});
+};
 
-// Update Order Status
-router.put("/:id/status", authMiddleware, async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-
-  if (
-    !["pending", "confirmed", "ready", "delivered", "cancelled"].includes(
-      status?.toLowerCase()
-    )
-  ) {
-    return res.status(400).json({ message: "Invalid status" });
-  }
-
+// Get orders for shop owner
+exports.getShopOwnerOrders = async (req, res) => {
   try {
-    const order = await Order.findByIdAndUpdate(id, { status }, { new: true });
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
+    const { status, limit = 100, page = 1 } = req.query;
+
+    const query = {};
+    if (status) {
+      query.status = status;
     }
-    res.json({ message: "Order status updated", order });
+
+    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+
+    const orders = await Order.find(query)
+      .populate("customer", "name email phone")
+      .populate("products.product", "name category imageUrl")
+      .sort({ createdAt: -1 })
+      .limit(Number.parseInt(limit))
+      .skip(skip);
+
+    const totalOrders = await Order.countDocuments(query);
+
+    // Get order statistics
+    const stats = await Order.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+          totalAmount: { $sum: "$total" },
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      orders,
+      stats,
+      pagination: {
+        currentPage: Number.parseInt(page),
+        totalPages: Math.ceil(totalOrders / Number.parseInt(limit)),
+        totalOrders,
+        hasMore: skip + orders.length < totalOrders,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Error fetching shop owner orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      error: error.message,
+    });
   }
-});
+};
 
-// Get Customer Orders
-router.get("/customer", authMiddleware, async (req, res) => {
+// Update order status
+exports.updateOrderStatus = async (req, res) => {
   try {
-    const orders = await Order.find({ customer: req.user.id })
-      .populate("products.product", "name price unit")
-      .sort({ createdAt: -1 });
+    const { orderId } = req.params;
+    const { status } = req.body;
 
-    const transformed = orders.map((order) => ({
-      ...order.toObject(),
-      items: order.products.map((p) => ({
-        productId: p.product,
-        quantity: p.quantity,
-        price: p.price,
-      })),
-    }));
+    const validStatuses = [
+      "pending",
+      "confirmed",
+      "preparing",
+      "ready",
+      "out_for_delivery",
+      "delivered",
+      "cancelled",
+    ];
 
-    res.json({ success: true, orders: transformed });
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid status. Valid statuses are: " + validStatuses.join(", "),
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Update status
+    order.status = status;
+
+    // Set delivery time if delivered
+    if (status === "delivered") {
+      order.actualDeliveryTime = new Date();
+      order.paymentStatus = "paid"; // Mark as paid when delivered
+    }
+
+    await order.save();
+
+    const updatedOrder = await Order.findById(orderId)
+      .populate("customer", "name email phone")
+      .populate("products.product", "name category imageUrl");
+
+    res.json({
+      success: true,
+      message: "Order status updated successfully",
+      order: updatedOrder,
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, message: "Server error", error: error.message });
+    console.error("Error updating order status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update order status",
+      error: error.message,
+    });
   }
-});
+};
 
-// Get Single Order
-router.get("/:id", authMiddleware, async (req, res) => {
+// Update payment method and status
+exports.updatePaymentMethod = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
-      .populate("customer", "name email")
-      .populate("products.product", "name price unit");
+    const { orderId } = req.params;
+    const { paymentMethod, paymentStatus } = req.body;
+
+    const validPaymentMethods = ["cash", "upi", "card", "online"];
+    const validPaymentStatuses = ["pending", "paid", "failed", "refunded"];
+
+    if (paymentMethod && !validPaymentMethods.includes(paymentMethod)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid payment method. Valid methods are: " +
+          validPaymentMethods.join(", "),
+      });
+    }
+
+    if (paymentStatus && !validPaymentStatuses.includes(paymentStatus)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid payment status. Valid statuses are: " +
+          validPaymentStatuses.join(", "),
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Update payment details
+    if (paymentMethod) {
+      order.paymentMethod = paymentMethod;
+    }
+    if (paymentStatus) {
+      order.paymentStatus = paymentStatus;
+    }
+
+    await order.save();
+
+    const updatedOrder = await Order.findById(orderId)
+      .populate("customer", "name email phone")
+      .populate("products.product", "name category imageUrl");
+
+    res.json({
+      success: true,
+      message: "Payment details updated successfully",
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error("Error updating payment details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update payment details",
+      error: error.message,
+    });
+  }
+};
+
+// Cancel order
+exports.cancelOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const customerId = req.user.id;
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Check if user owns this order
+    if (order.customer.toString() !== customerId) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only cancel your own orders",
+      });
+    }
+
+    // Check if order can be cancelled
+    if (["delivered", "cancelled"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Order cannot be cancelled",
+      });
+    }
+
+    // Restore product stock
+    for (const item of order.products) {
+      const product = await Product.findById(item.product);
+      if (product) {
+        product.stock += item.quantity;
+        await product.save();
+      }
+    }
+
+    // Update order status
+    order.status = "cancelled";
+    order.paymentStatus = "refunded";
+    await order.save();
+
+    const updatedOrder = await Order.findById(orderId)
+      .populate("customer", "name email phone")
+      .populate("products.product", "name category imageUrl");
+
+    res.json({
+      success: true,
+      message: "Order cancelled successfully",
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error("Error cancelling order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to cancel order",
+      error: error.message,
+    });
+  }
+};
+
+// Get single order details
+exports.getOrderById = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const order = await Order.findById(orderId)
+      .populate("customer", "name email phone")
+      .populate("products.product", "name category imageUrl price");
 
     if (!order) {
       return res.status(404).json({
@@ -178,21 +429,142 @@ router.get("/:id", authMiddleware, async (req, res) => {
       });
     }
 
-    const formatted = {
-      ...order.toObject(),
-      items: order.products.map((p) => ({
-        productId: p.product,
-        quantity: p.quantity,
-        price: p.price,
-      })),
-    };
+    // Check permissions
+    if (userRole === "customer" && order.customer._id.toString() !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only view your own orders",
+      });
+    }
 
-    res.json({ success: true, order: formatted });
+    res.json({
+      success: true,
+      order,
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, message: "Server error", error: error.message });
+    console.error("Error fetching order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch order",
+      error: error.message,
+    });
   }
-});
+};
 
-module.exports = router;
+// Get order analytics for shop owner
+exports.getOrderAnalytics = async (req, res) => {
+  try {
+    const { period = "7d" } = req.query;
+
+    let dateFilter = {};
+    const now = new Date();
+
+    switch (period) {
+      case "24h":
+        dateFilter = {
+          createdAt: { $gte: new Date(now - 24 * 60 * 60 * 1000) },
+        };
+        break;
+      case "7d":
+        dateFilter = {
+          createdAt: { $gte: new Date(now - 7 * 24 * 60 * 60 * 1000) },
+        };
+        break;
+      case "30d":
+        dateFilter = {
+          createdAt: { $gte: new Date(now - 30 * 24 * 60 * 60 * 1000) },
+        };
+        break;
+      case "90d":
+        dateFilter = {
+          createdAt: { $gte: new Date(now - 90 * 24 * 60 * 60 * 1000) },
+        };
+        break;
+    }
+
+    // Get order statistics
+    const orderStats = await Order.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+          totalRevenue: { $sum: "$total" },
+        },
+      },
+    ]);
+
+    // Get daily order trends
+    const dailyTrends = await Order.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+            day: { $dayOfMonth: "$createdAt" },
+          },
+          orderCount: { $sum: 1 },
+          revenue: { $sum: "$total" },
+        },
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
+    ]);
+
+    // Get payment method distribution
+    const paymentMethods = await Order.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: "$paymentMethod",
+          count: { $sum: 1 },
+          totalAmount: { $sum: "$total" },
+        },
+      },
+    ]);
+
+    // Get top products
+    const topProducts = await Order.aggregate([
+      { $match: dateFilter },
+      { $unwind: "$products" },
+      {
+        $group: {
+          _id: "$products.product",
+          totalQuantity: { $sum: "$products.quantity" },
+          totalRevenue: {
+            $sum: { $multiply: ["$products.quantity", "$products.price"] },
+          },
+        },
+      },
+      { $sort: { totalQuantity: -1 } },
+      { $limit: 10 },
+      {
+        $lookup: {
+          from: "products",
+          localField: "_id",
+          foreignField: "_id",
+          as: "productInfo",
+        },
+      },
+      { $unwind: "$productInfo" },
+    ]);
+
+    res.json({
+      success: true,
+      analytics: {
+        orderStats,
+        dailyTrends,
+        paymentMethods,
+        topProducts,
+        period,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching order analytics:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch order analytics",
+      error: error.message,
+    });
+  }
+};

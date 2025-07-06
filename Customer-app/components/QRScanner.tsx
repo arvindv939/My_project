@@ -1,242 +1,202 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { X, Flashlight, FlashlightOff, RotateCcw } from 'lucide-react-native';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withRepeat, 
-  withTiming,
-  interpolate,
-  Easing
-} from 'react-native-reanimated';
+'use client';
+
+import { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
+  Dimensions,
+} from 'react-native';
+import { Camera, CameraView } from 'expo-camera';
+import { X, QrCode } from 'lucide-react-native';
 
 interface QRScannerProps {
+  isVisible: boolean;
   onScan: (data: string) => void;
   onClose: () => void;
-  isVisible: boolean;
 }
 
-export const QRScanner = ({ onScan, onClose, isVisible }: QRScannerProps) => {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState<CameraType>('back');
-  const [flashlight, setFlashlight] = useState(false);
+const { width, height } = Dimensions.get('window');
+
+export function QRScanner({ isVisible, onScan, onClose }: QRScannerProps) {
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
 
-  // Animation values
-  const scanLinePosition = useSharedValue(0);
-  const overlayOpacity = useSharedValue(0);
+  const getCameraPermissions = async () => {
+    const { status } = await Camera.requestCameraPermissionsAsync();
+    setHasPermission(status === 'granted');
+  };
 
   useEffect(() => {
     if (isVisible) {
-      overlayOpacity.value = withTiming(1, { duration: 300 });
-      // Start scan line animation
-      scanLinePosition.value = withRepeat(
-        withTiming(1, { duration: 2000, easing: Easing.linear }),
-        -1,
-        true
-      );
-    } else {
-      overlayOpacity.value = withTiming(0, { duration: 300 });
-      scanLinePosition.value = 0;
+      getCameraPermissions();
     }
   }, [isVisible]);
 
-  const overlayStyle = useAnimatedStyle(() => ({
-    opacity: overlayOpacity.value,
-  }));
-
-  const scanLineStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(scanLinePosition.value, [0, 1], [0, 200])
-      }
-    ],
-  }));
-
-  if (!permission) {
-    return <View />;
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>
-          Camera permission is required to scan QR codes
-        </Text>
-        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
+  const handleBarCodeScanned = ({
+    type,
+    data,
+  }: {
+    type: string;
+    data: string;
+  }) => {
     if (!scanned) {
       setScanned(true);
       onScan(data);
-      
-      // Haptic feedback for mobile
-      if (Platform.OS !== 'web') {
-        // Would use Haptics.impactAsync() here on mobile
-      }
-      
-      // Reset scanned state after a delay
-      setTimeout(() => setScanned(false), 2000);
+
+      // Reset scanned state after a delay to allow for new scans
+      setTimeout(() => {
+        setScanned(false);
+      }, 2000);
     }
   };
 
-  const toggleFlashlight = () => {
-    setFlashlight(!flashlight);
+  const handleClose = () => {
+    setScanned(false);
+    onClose();
   };
 
-  const toggleCameraFacing = () => {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
-  };
+  if (hasPermission === null) {
+    return null;
+  }
 
-  if (!isVisible) return null;
+  if (hasPermission === false) {
+    return (
+      <Modal visible={isVisible} animationType="slide" statusBarTranslucent>
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+              <X size={24} color="#ffffff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>QR Scanner</Text>
+            <View style={styles.placeholder} />
+          </View>
+          <View style={styles.permissionContainer}>
+            <QrCode size={64} color="#27AE60" />
+            <Text style={styles.permissionTitle}>
+              Camera Permission Required
+            </Text>
+            <Text style={styles.permissionText}>
+              Please grant camera permission to scan QR codes for products.
+            </Text>
+            <TouchableOpacity
+              style={styles.permissionButton}
+              onPress={getCameraPermissions}
+            >
+              <Text style={styles.permissionButtonText}>Grant Permission</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   return (
-    <Animated.View style={[styles.container, overlayStyle]}>
-      <CameraView
-        style={styles.camera}
-        facing={facing}
-        onBarcodeScanned={handleBarCodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
-        }}
-      >
+    <Modal visible={isVisible} animationType="slide" statusBarTranslucent>
+      <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.headerButton} onPress={onClose}>
+          <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
             <X size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Scan QR Code</Text>
-          <View style={styles.headerSpacer} />
+          <Text style={styles.headerTitle}>QR Scanner</Text>
+          <View style={styles.placeholder} />
         </View>
 
-        {/* Scanning Area */}
-        <View style={styles.scanningArea}>
-          <View style={styles.scanFrame}>
-            {/* Corner indicators */}
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
-            
-            {/* Animated scan line */}
-            <Animated.View style={[styles.scanLine, scanLineStyle]} />
-          </View>
-          
+        {/* Camera View */}
+        <View style={styles.cameraContainer}>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            barcodeScannerSettings={{
+              barcodeTypes: ['qr'],
+            }}
+          >
+            {/* Scanning Overlay */}
+            <View style={styles.overlay}>
+              <View style={styles.scanArea}>
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+
+                {/* Animated scanning line */}
+                <View style={styles.scanLine} />
+              </View>
+            </View>
+          </CameraView>
+        </View>
+
+        {/* Instructions */}
+        <View style={styles.instructions}>
+          <QrCode size={32} color="#27AE60" />
+          <Text style={styles.instructionTitle}>Scan Product QR Code</Text>
           <Text style={styles.instructionText}>
-            Position the QR code within the frame
+            Point your camera at a product QR code to add it to your cart
           </Text>
+          {scanned && (
+            <View style={styles.scannedIndicator}>
+              <Text style={styles.scannedText}>✅ QR Code Scanned!</Text>
+            </View>
+          )}
         </View>
-
-        {/* Controls */}
-        <View style={styles.controls}>
-          <TouchableOpacity style={styles.controlButton} onPress={toggleFlashlight}>
-            {flashlight ? (
-              <FlashlightOff size={24} color="#ffffff" />
-            ) : (
-              <Flashlight size={24} color="#ffffff" />
-            )}
-            <Text style={styles.controlText}>Flash</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.controlButton} onPress={toggleCameraFacing}>
-            <RotateCcw size={24} color="#ffffff" />
-            <Text style={styles.controlText}>Flip</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Scanned indicator */}
-        {scanned && (
-          <View style={styles.scannedIndicator}>
-            <Text style={styles.scannedText}>✓ QR Code Scanned!</Text>
-          </View>
-        )}
-      </CameraView>
-    </Animated.View>
+      </View>
+    </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-  },
-  camera: {
     flex: 1,
-  },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#000000',
-    padding: 20,
-  },
-  permissionText: {
-    color: '#ffffff',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 20,
-    fontFamily: 'Inter-Regular',
-  },
-  permissionButton: {
-    backgroundColor: '#16A34A',
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  permissionButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 60,
+    justifyContent: 'space-between',
+    paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#27AE60',
   },
-  headerButton: {
+  closeButton: {
     padding: 8,
   },
   headerTitle: {
-    flex: 1,
-    color: '#ffffff',
     fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    textAlign: 'center',
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
-  headerSpacer: {
+  placeholder: {
     width: 40,
   },
-  scanningArea: {
+  cameraContainer: {
     flex: 1,
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
   },
-  scanFrame: {
+  scanArea: {
     width: 250,
     height: 250,
     position: 'relative',
-    marginBottom: 40,
   },
   corner: {
     position: 'absolute',
     width: 30,
     height: 30,
-    borderColor: '#16A34A',
-    borderWidth: 3,
+    borderColor: '#27AE60',
+    borderWidth: 4,
   },
   topLeft: {
     top: 0,
@@ -266,54 +226,74 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    top: '50%',
     height: 2,
-    backgroundColor: '#16A34A',
-    shadowColor: '#16A34A',
+    backgroundColor: '#27AE60',
+    shadowColor: '#27AE60',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 4,
   },
-  instructionText: {
-    color: '#ffffff',
-    fontSize: 16,
-    textAlign: 'center',
-    fontFamily: 'Inter-Regular',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  controls: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 60,
-    paddingBottom: 60,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  controlButton: {
+  instructions: {
+    backgroundColor: '#ffffff',
+    padding: 24,
     alignItems: 'center',
-    padding: 16,
   },
-  controlText: {
-    color: '#ffffff',
-    fontSize: 12,
-    marginTop: 4,
-    fontFamily: 'Inter-Regular',
+  instructionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  instructionText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   scannedIndicator: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    marginTop: 16,
+    backgroundColor: '#E8F5E8',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   scannedText: {
-    color: '#16A34A',
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+    fontSize: 14,
+    color: '#27AE60',
+    fontWeight: '600',
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#ffffff',
+  },
+  permissionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  permissionText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 30,
+  },
+  permissionButton: {
+    backgroundColor: '#27AE60',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  permissionButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
 });

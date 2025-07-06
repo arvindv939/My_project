@@ -22,12 +22,14 @@ import {
   MapPin,
   RotateCcw,
   CreditCard,
+  FileText,
 } from 'lucide-react-native';
 import { orderService, type Order } from '@/services/orderService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { timingService } from '@/services/timingService';
 import { formatIndianCurrency } from '@/utils/currency';
+import { invoiceService } from '@/services/invoiceService';
 import LiveTimer from '@/components/LiveTimer';
 
 const getStatusIcon = (status: string) => {
@@ -38,8 +40,6 @@ const getStatusIcon = (status: string) => {
       return <CheckCircle size={20} color="#10B981" />;
     case 'preparing':
       return <Package size={20} color="#3B82F6" />;
-    case 'ready':
-      return <CheckCircle size={20} color="#8B5CF6" />;
     case 'out_for_delivery':
       return <Truck size={20} color="#8B5CF6" />;
     case 'delivered':
@@ -59,8 +59,6 @@ const getStatusColor = (status: string) => {
       return '#10B981';
     case 'preparing':
       return '#3B82F6';
-    case 'ready':
-      return '#8B5CF6';
     case 'out_for_delivery':
       return '#8B5CF6';
     case 'delivered':
@@ -69,6 +67,25 @@ const getStatusColor = (status: string) => {
       return '#EF4444';
     default:
       return '#6B7280';
+  }
+};
+
+const getStatusBgColor = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'pending':
+      return '#FEF3C7';
+    case 'confirmed':
+      return '#D1FAE5';
+    case 'preparing':
+      return '#DBEAFE';
+    case 'out_for_delivery':
+      return '#EDE9FE';
+    case 'delivered':
+      return '#D1FAE5';
+    case 'cancelled':
+      return '#FEE2E2';
+    default:
+      return '#F3F4F6';
   }
 };
 
@@ -112,15 +129,6 @@ export default function OrdersScreen() {
     };
 
     initializeServices();
-  }, []);
-
-  // Auto-refresh orders every 3 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchOrders();
-    }, 3000);
-
-    return () => clearInterval(interval);
   }, []);
 
   const fetchOrders = async () => {
@@ -169,23 +177,13 @@ export default function OrdersScreen() {
         completed: [
           'confirmed',
           'preparing',
-          'ready',
           'out_for_delivery',
           'delivered',
         ].includes(status.toLowerCase()),
       },
       {
         step: 'Preparing',
-        completed: [
-          'preparing',
-          'ready',
-          'out_for_delivery',
-          'delivered',
-        ].includes(status.toLowerCase()),
-      },
-      {
-        step: 'Ready for Pickup',
-        completed: ['ready', 'out_for_delivery', 'delivered'].includes(
+        completed: ['preparing', 'out_for_delivery', 'delivered'].includes(
           status.toLowerCase()
         ),
       },
@@ -259,6 +257,17 @@ export default function OrdersScreen() {
     }
   };
 
+  const handleDownloadInvoice = async (order: Order) => {
+    try {
+      const invoiceContent = await invoiceService.generateInvoice(order, user);
+      await invoiceService.shareInvoice(invoiceContent);
+      Alert.alert('✅ Success', 'Invoice downloaded successfully!');
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      Alert.alert('❌ Error', 'Failed to download invoice');
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -303,9 +312,8 @@ export default function OrdersScreen() {
     }
   };
 
-  // Fixed order filtering to include 'ready' status
   const pendingOrders = orders.filter((order) =>
-    ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(
+    ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(
       order.status.toLowerCase()
     )
   );
@@ -518,7 +526,7 @@ export default function OrdersScreen() {
                   <View
                     style={[
                       styles.statusBadge,
-                      { backgroundColor: getStatusColor(order.status) + '20' },
+                      { backgroundColor: getStatusBgColor(order.status) },
                     ]}
                   >
                     {getStatusIcon(order.status)}
@@ -593,6 +601,15 @@ export default function OrdersScreen() {
                   </View>
 
                   <View style={styles.orderActions}>
+                    {/* Invoice Button - Show for all orders */}
+                    <TouchableOpacity
+                      style={styles.invoiceButton}
+                      onPress={() => handleDownloadInvoice(order)}
+                    >
+                      <FileText size={16} color="#ffffff" />
+                      <Text style={styles.invoiceButtonText}>Invoice</Text>
+                    </TouchableOpacity>
+
                     {activeTab === 'pending' &&
                       order.status.toLowerCase() === 'pending' && (
                         <TouchableOpacity
@@ -756,6 +773,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#27AE60',
   },
   orderHeader: {
     flexDirection: 'row',
@@ -779,10 +798,10 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
   },
   statusText: {
     fontSize: 12,
@@ -790,6 +809,9 @@ const styles = StyleSheet.create({
   },
   orderItems: {
     marginBottom: 12,
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 8,
   },
   itemsTitle: {
     fontSize: 14,
@@ -811,23 +833,27 @@ const styles = StyleSheet.create({
   itemDetails: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: '#27AE60',
   },
   moreItems: {
     fontSize: 12,
     color: '#27AE60',
     marginTop: 4,
+    fontStyle: 'italic',
   },
   deliveryInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     gap: 8,
+    backgroundColor: '#F0FDF4',
+    padding: 8,
+    borderRadius: 8,
   },
   deliveryAddress: {
     flex: 1,
     fontSize: 14,
-    color: '#6B7280',
+    color: '#15803D',
   },
   orderFooter: {
     flexDirection: 'row',
@@ -848,46 +874,61 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: '#27AE60',
   },
   orderActions: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
+  },
+  invoiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#3B82F6',
+    gap: 4,
+  },
+  invoiceButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   cancelButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#EF4444',
   },
   cancelButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#EF4444',
   },
   trackButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     backgroundColor: '#27AE60',
   },
   trackButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#ffffff',
   },
   reorderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
     backgroundColor: '#27AE60',
     gap: 6,
   },
   reorderButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#ffffff',
   },

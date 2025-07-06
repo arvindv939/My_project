@@ -23,18 +23,54 @@ const getAdminOrders = async (req, res) => {
   try {
     const orders = await Order.find({})
       .populate({
-        path: "customer",
-        select: "name email",
+        path: "customerId",
+        select: "name email phone",
         strictPopulate: false,
       })
       .populate({
-        path: "items.product",
-        select: "name",
+        path: "items.productId",
+        select: "name price unit category",
         strictPopulate: false,
       })
       .sort({ createdAt: -1 });
 
-    res.json({ orders });
+    // Process orders to ensure proper total calculation and update database
+    const processedOrders = await Promise.all(
+      orders.map(async (order) => {
+        const orderObj = order.toObject();
+
+        // Add customer field for backward compatibility
+        orderObj.customer = orderObj.customerId;
+
+        // Calculate total from items
+        if (orderObj.items && orderObj.items.length > 0) {
+          let calculatedTotal = 0;
+
+          orderObj.items.forEach((item) => {
+            const productPrice = item.productId?.price || item.price || 0;
+            calculatedTotal += productPrice * (item.quantity || 0);
+          });
+
+          // Update the order total if it's 0 or missing
+          if (!orderObj.totalAmount || orderObj.totalAmount === 0) {
+            orderObj.totalAmount = calculatedTotal;
+
+            // Update the database record
+            try {
+              await Order.findByIdAndUpdate(order._id, {
+                totalAmount: calculatedTotal,
+              });
+            } catch (updateError) {
+              console.error("Error updating order total:", updateError);
+            }
+          }
+        }
+
+        return orderObj;
+      })
+    );
+
+    res.json({ orders: processedOrders });
   } catch (err) {
     console.error("getAdminOrders error:", err);
     res
@@ -71,10 +107,10 @@ const getAdminUsers = async (req, res) => {
   try {
     const users = await User.find({}).select("name email role createdAt");
 
+    // Only count Customer, ShopOwner, and Admin roles - exclude Worker completely
     const countByRole = {
       Customer: 0,
       ShopOwner: 0,
-      Worker: 0,
       Admin: 0,
     };
 
@@ -84,10 +120,13 @@ const getAdminUsers = async (req, res) => {
       }
     });
 
+    // Filter out any users with Worker role from the response
+    const filteredUsers = users.filter((user) => user.role !== "Worker");
+
     res.json({
-      total: users.length,
+      total: filteredUsers.length,
       countByRole,
-      users,
+      users: filteredUsers,
     });
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch users", error: err });
@@ -187,10 +226,16 @@ const getRevenueAnalytics = async (req, res) => {
 
 const getUserAnalytics = async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const activeUsers = await User.countDocuments({ isActive: true });
+    const totalUsers = await User.countDocuments({ role: { $ne: "Worker" } });
+    const activeUsers = await User.countDocuments({
+      isActive: true,
+      role: { $ne: "Worker" },
+    });
 
     const usersByRole = await User.aggregate([
+      {
+        $match: { role: { $ne: "Worker" } },
+      },
       {
         $group: {
           _id: "$role",
@@ -200,6 +245,9 @@ const getUserAnalytics = async (req, res) => {
     ]);
 
     const userGrowth = await User.aggregate([
+      {
+        $match: { role: { $ne: "Worker" } },
+      },
       {
         $group: {
           _id: {

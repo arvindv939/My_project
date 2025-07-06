@@ -1,83 +1,63 @@
 const Announcement = require("../models/Announcement");
-const User = require("../models/User");
 
 // Get all announcements
-exports.getAnnouncements = async (req, res) => {
+const getAnnouncements = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 10,
-      type,
-      priority,
-      targetAudience,
-      isActive,
-      userId,
-    } = req.query;
+    const { targetAudience, type, priority, active } = req.query;
 
-    const query = {};
-    if (type) query.type = type;
-    if (priority) query.priority = priority;
-    if (targetAudience) query.targetAudience = targetAudience;
-    if (isActive !== undefined) query.isActive = isActive === "true";
+    const filter = {};
 
-    // Filter by expiry date
-    query.$or = [
-      { expiresAt: { $exists: false } },
-      { expiresAt: { $gte: new Date() } },
-    ];
-
-    // Filter by user role if userId provided
-    if (userId) {
-      const user = await User.findById(userId);
-      if (user) {
-        const userRole = user.role.toLowerCase();
-        query.$and = [
-          {
-            $or: [
-              { targetAudience: "all" },
-              {
-                targetAudience:
-                  userRole === "shopowner" ? "shop_owners" : userRole + "s",
-              },
-            ],
-          },
-        ];
-      }
+    // Filter by target audience
+    if (targetAudience && targetAudience !== "all") {
+      filter.targetAudience = { $in: [targetAudience, "all"] };
     }
 
-    const announcements = await Announcement.find(query)
-      .populate("createdBy", "name email")
-      .populate("targetBranches", "name code")
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .sort({ priority: -1, createdAt: -1 });
+    // Filter by type
+    if (type) {
+      filter.type = type;
+    }
 
-    const total = await Announcement.countDocuments(query);
+    // Filter by priority
+    if (priority) {
+      filter.priority = priority;
+    }
+
+    // Filter by active status (not expired)
+    if (active === "true") {
+      filter.$or = [
+        { expiresAt: { $exists: false } },
+        { expiresAt: null },
+        { expiresAt: { $gt: new Date() } },
+      ];
+    }
+
+    const announcements = await Announcement.find(filter)
+      .populate("createdBy", "name email")
+      .sort({ priority: -1, createdAt: -1 });
 
     res.json({
       success: true,
       announcements,
-      totalPages: Math.ceil(total / limit),
-      currentPage: Number.parseInt(page),
-      total,
     });
   } catch (error) {
     console.error("Error fetching announcements:", error);
     res.status(500).json({
       success: false,
-      message: "Error fetching announcements",
+      message: "Failed to fetch announcements",
       error: error.message,
     });
   }
 };
 
 // Get single announcement
-exports.getAnnouncement = async (req, res) => {
+const getAnnouncementById = async (req, res) => {
   try {
-    const announcement = await Announcement.findById(req.params.id)
-      .populate("createdBy", "name email")
-      .populate("targetBranches", "name code address")
-      .populate("readBy.user", "name email");
+    const { id } = req.params;
+
+    const announcement = await Announcement.findById(id).populate(
+      "createdBy",
+      "name email"
+    );
 
     if (!announcement) {
       return res.status(404).json({
@@ -94,27 +74,22 @@ exports.getAnnouncement = async (req, res) => {
     console.error("Error fetching announcement:", error);
     res.status(500).json({
       success: false,
-      message: "Error fetching announcement",
+      message: "Failed to fetch announcement",
       error: error.message,
     });
   }
 };
 
 // Create announcement
-exports.createAnnouncement = async (req, res) => {
+const createAnnouncement = async (req, res) => {
   try {
     const {
       title,
       message,
-      type,
-      priority,
-      targetAudience,
-      targetBranches,
+      type = "info",
+      targetAudience = "all",
+      priority = "medium",
       expiresAt,
-      attachments,
-      discountPercentage,
-      applicableProducts,
-      minOrderValue,
     } = req.body;
 
     // Validate required fields
@@ -126,24 +101,19 @@ exports.createAnnouncement = async (req, res) => {
     }
 
     const announcement = new Announcement({
-      title: title.trim(),
-      message: message.trim(),
-      type: type || "info",
-      priority: priority || "medium",
-      targetAudience: targetAudience || "all",
-      targetBranches: targetBranches || [],
+      title,
+      message,
+      type,
+      targetAudience,
+      priority,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
-      attachments: attachments || [],
       createdBy: req.user.id,
-      discountPercentage: discountPercentage || 0,
-      applicableProducts: applicableProducts || [],
-      minOrderValue: minOrderValue || 0,
     });
 
     await announcement.save();
 
+    // Populate the created announcement
     await announcement.populate("createdBy", "name email");
-    await announcement.populate("targetBranches", "name code");
 
     res.status(201).json({
       success: true,
@@ -154,19 +124,21 @@ exports.createAnnouncement = async (req, res) => {
     console.error("Error creating announcement:", error);
     res.status(500).json({
       success: false,
-      message: "Error creating announcement",
+      message: "Failed to create announcement",
       error: error.message,
     });
   }
 };
 
 // Update announcement
-exports.updateAnnouncement = async (req, res) => {
+const updateAnnouncement = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { title, message, type, targetAudience, priority, expiresAt } =
+      req.body;
 
     const announcement = await Announcement.findById(id);
+
     if (!announcement) {
       return res.status(404).json({
         success: false,
@@ -174,61 +146,47 @@ exports.updateAnnouncement = async (req, res) => {
       });
     }
 
-    // Check if user has permission to update
-    if (
-      announcement.createdBy.toString() !== req.user.id &&
-      req.user.role !== "Admin"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized to update this announcement",
-      });
+    // Update fields
+    if (title) announcement.title = title;
+    if (message) announcement.message = message;
+    if (type) announcement.type = type;
+    if (targetAudience) announcement.targetAudience = targetAudience;
+    if (priority) announcement.priority = priority;
+    if (expiresAt !== undefined) {
+      announcement.expiresAt = expiresAt ? new Date(expiresAt) : null;
     }
 
-    const updatedAnnouncement = await Announcement.findByIdAndUpdate(
-      id,
-      { ...updates, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    )
-      .populate("createdBy", "name email")
-      .populate("targetBranches", "name code");
+    announcement.updatedAt = new Date();
+
+    await announcement.save();
+    await announcement.populate("createdBy", "name email");
 
     res.json({
       success: true,
       message: "Announcement updated successfully",
-      announcement: updatedAnnouncement,
+      announcement,
     });
   } catch (error) {
     console.error("Error updating announcement:", error);
     res.status(500).json({
       success: false,
-      message: "Error updating announcement",
+      message: "Failed to update announcement",
       error: error.message,
     });
   }
 };
 
 // Delete announcement
-exports.deleteAnnouncement = async (req, res) => {
+const deleteAnnouncement = async (req, res) => {
   try {
     const { id } = req.params;
 
     const announcement = await Announcement.findById(id);
+
     if (!announcement) {
       return res.status(404).json({
         success: false,
         message: "Announcement not found",
-      });
-    }
-
-    // Check if user has permission to delete
-    if (
-      announcement.createdBy.toString() !== req.user.id &&
-      req.user.role !== "Admin"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized to delete this announcement",
       });
     }
 
@@ -242,19 +200,20 @@ exports.deleteAnnouncement = async (req, res) => {
     console.error("Error deleting announcement:", error);
     res.status(500).json({
       success: false,
-      message: "Error deleting announcement",
+      message: "Failed to delete announcement",
       error: error.message,
     });
   }
 };
 
-// Mark announcement as read
-exports.markAsRead = async (req, res) => {
+// Mark announcement as read by user
+const markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
     const announcement = await Announcement.findById(id);
+
     if (!announcement) {
       return res.status(404).json({
         success: false,
@@ -262,16 +221,9 @@ exports.markAsRead = async (req, res) => {
       });
     }
 
-    // Check if already read by this user
-    const alreadyRead = announcement.readBy.some(
-      (read) => read.user.toString() === userId
-    );
-
-    if (!alreadyRead) {
-      announcement.readBy.push({
-        user: userId,
-        readAt: new Date(),
-      });
+    // Add user to readBy array if not already present
+    if (!announcement.readBy.includes(userId)) {
+      announcement.readBy.push(userId);
       await announcement.save();
     }
 
@@ -283,85 +235,73 @@ exports.markAsRead = async (req, res) => {
     console.error("Error marking announcement as read:", error);
     res.status(500).json({
       success: false,
-      message: "Error marking announcement as read",
+      message: "Failed to mark announcement as read",
       error: error.message,
     });
   }
 };
 
 // Get announcement statistics
-exports.getAnnouncementStats = async (req, res) => {
+const getAnnouncementStats = async (req, res) => {
   try {
-    const stats = await Announcement.aggregate([
+    const totalAnnouncements = await Announcement.countDocuments();
+    const activeAnnouncements = await Announcement.countDocuments({
+      $or: [
+        { expiresAt: { $exists: false } },
+        { expiresAt: null },
+        { expiresAt: { $gt: new Date() } },
+      ],
+    });
+    const expiredAnnouncements = await Announcement.countDocuments({
+      expiresAt: { $lte: new Date() },
+    });
+
+    // Get announcements by type
+    const announcementsByType = await Announcement.aggregate([
       {
         $group: {
-          _id: null,
-          total: { $sum: 1 },
-          active: { $sum: { $cond: ["$isActive", 1, 0] } },
-          byType: {
-            $push: {
-              type: "$type",
-              count: 1,
-            },
-          },
-          byPriority: {
-            $push: {
-              priority: "$priority",
-              count: 1,
-            },
-          },
+          _id: "$type",
+          count: { $sum: 1 },
         },
       },
     ]);
 
-    const typeStats = await Announcement.aggregate([
-      { $group: { _id: "$type", count: { $sum: 1 } } },
-    ]);
-
-    const priorityStats = await Announcement.aggregate([
-      { $group: { _id: "$priority", count: { $sum: 1 } } },
+    // Get announcements by priority
+    const announcementsByPriority = await Announcement.aggregate([
+      {
+        $group: {
+          _id: "$priority",
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     res.json({
       success: true,
       stats: {
-        total: stats[0]?.total || 0,
-        active: stats[0]?.active || 0,
-        byType: typeStats,
-        byPriority: priorityStats,
+        total: totalAnnouncements,
+        active: activeAnnouncements,
+        expired: expiredAnnouncements,
+        byType: announcementsByType,
+        byPriority: announcementsByPriority,
       },
     });
   } catch (error) {
     console.error("Error fetching announcement stats:", error);
     res.status(500).json({
       success: false,
-      message: "Error fetching announcement stats",
+      message: "Failed to fetch announcement statistics",
       error: error.message,
     });
   }
 };
 
-// Get active discounts for customers and shop owners
-exports.getActiveDiscounts = async (req, res) => {
-  try {
-    const now = new Date();
-    const activeDiscounts = await Announcement.find({
-      type: "promotion",
-      isActive: true,
-      discountPercentage: { $gt: 0 },
-      $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gte: now } }],
-    }).populate("createdBy", "name");
-
-    res.json({
-      success: true,
-      discounts: activeDiscounts,
-    });
-  } catch (error) {
-    console.error("Error fetching active discounts:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching active discounts",
-      error: error.message,
-    });
-  }
+module.exports = {
+  getAnnouncements,
+  getAnnouncementById,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+  markAsRead,
+  getAnnouncementStats,
 };

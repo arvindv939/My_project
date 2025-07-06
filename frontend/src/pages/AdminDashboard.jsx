@@ -72,7 +72,6 @@ function AdminDashboard() {
   const [announcements, setAnnouncements] = useState([]);
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
-  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   const [branchForm, setBranchForm] = useState({
     name: "",
     address: {
@@ -93,8 +92,6 @@ function AdminDashboard() {
     targetAudience: "all",
     priority: "medium",
     expiresAt: "",
-    discountPercentage: "",
-    minOrderValue: "",
   });
 
   // User management states
@@ -175,6 +172,7 @@ function AdminDashboard() {
         revenue: response.data.revenue,
         profit: response.data.profit,
         loss: response.data.loss,
+        totalRevenue: response.data.revenue, // Set totalRevenue for display
       }));
     } catch (error) {
       console.error("Error fetching financials:", error);
@@ -223,12 +221,12 @@ function AdminDashboard() {
       setAnalytics((prev) => ({
         ...prev,
         totalUsers: response.data.users?.length || 0,
-        usersByRole: Object.entries(response.data.countByRole || {})
-          .filter(([role]) => role !== "Worker") // Exclude Worker role
-          .map(([role, count]) => ({
+        usersByRole: Object.entries(response.data.countByRole || {}).map(
+          ([role, count]) => ({
             _id: role,
             count: count,
-          })),
+          })
+        ),
       }));
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -287,7 +285,6 @@ function AdminDashboard() {
       setAnalytics((prev) => ({
         ...prev,
         monthlyData: response.data.revenueData || [],
-        totalRevenue: response.data.totalRevenue || 0,
       }));
     } catch (error) {
       console.error("Error fetching revenue analytics:", error);
@@ -360,23 +357,10 @@ function AdminDashboard() {
   const handleCreateAnnouncement = async (e) => {
     e.preventDefault();
     try {
-      if (editingAnnouncement) {
-        await API.put(
-          `/announcements/${editingAnnouncement._id}`,
-          announcementForm,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        );
-      } else {
-        await API.post("/announcements", announcementForm, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-      }
+      await API.post("/announcements", announcementForm, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
       setShowAnnouncementModal(false);
-      setEditingAnnouncement(null);
       setAnnouncementForm({
         title: "",
         message: "",
@@ -384,44 +368,11 @@ function AdminDashboard() {
         targetAudience: "all",
         priority: "medium",
         expiresAt: "",
-        discountPercentage: "",
-        minOrderValue: "",
       });
       fetchAnnouncements();
     } catch (error) {
-      console.error("Error saving announcement:", error);
-      alert("Error saving announcement. Please try again.");
-    }
-  };
-
-  const handleEditAnnouncement = (announcement) => {
-    setEditingAnnouncement(announcement);
-    setAnnouncementForm({
-      title: announcement.title,
-      message: announcement.message,
-      type: announcement.type,
-      targetAudience: announcement.targetAudience,
-      priority: announcement.priority,
-      expiresAt: announcement.expiresAt
-        ? new Date(announcement.expiresAt).toISOString().slice(0, 16)
-        : "",
-      discountPercentage: announcement.discountPercentage || "",
-      minOrderValue: announcement.minOrderValue || "",
-    });
-    setShowAnnouncementModal(true);
-  };
-
-  const handleDeleteAnnouncement = async (announcementId) => {
-    if (window.confirm("Are you sure you want to delete this announcement?")) {
-      try {
-        await API.delete(`/announcements/${announcementId}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
-        fetchAnnouncements();
-      } catch (error) {
-        console.error("Error deleting announcement:", error);
-        alert("Error deleting announcement. Please try again.");
-      }
+      console.error("Error creating announcement:", error);
+      alert("Error creating announcement. Please try again.");
     }
   };
 
@@ -760,23 +711,23 @@ function AdminDashboard() {
                 User Management
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {analytics.usersByRole?.map((roleData, index) => (
-                  <div
-                    key={roleData._id}
-                    className={`bg-gradient-to-r ${
-                      COLORS[index % COLORS.length] === "#8884d8"
-                        ? "from-blue-500 to-blue-600"
-                        : COLORS[index % COLORS.length] === "#82ca9d"
-                        ? "from-green-500 to-green-600"
-                        : COLORS[index % COLORS.length] === "#ffc658"
-                        ? "from-yellow-500 to-yellow-600"
-                        : "from-purple-500 to-purple-600"
-                    } rounded-xl p-6 text-white`}
-                  >
-                    <h4 className="text-lg font-semibold">{roleData._id}s</h4>
-                    <p className="text-3xl font-bold">{roleData.count}</p>
-                  </div>
-                ))}
+                {analytics.usersByRole
+                  ?.filter((roleData) => roleData._id !== "Worker")
+                  .map((roleData, index) => (
+                    <div
+                      key={roleData._id}
+                      className={`bg-gradient-to-r ${
+                        roleData._id === "Customer"
+                          ? "from-blue-500 to-blue-600"
+                          : roleData._id === "ShopOwner"
+                          ? "from-green-500 to-green-600"
+                          : "from-purple-500 to-purple-600"
+                      } rounded-xl p-6 text-white`}
+                    >
+                      <h4 className="text-lg font-semibold">{roleData._id}s</h4>
+                      <p className="text-3xl font-bold">{roleData.count}</p>
+                    </div>
+                  ))}
               </div>
 
               {/* Users Table */}
@@ -1012,28 +963,14 @@ function AdminDashboard() {
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-bold mb-4 text-gray-800">
-                    Announcements & Promotions
+                    Announcements & Communications
                   </h3>
                   <p className="text-gray-600">
-                    Create and manage platform-wide announcements and discount
-                    offers
+                    Create and manage platform-wide announcements
                   </p>
                 </div>
                 <button
-                  onClick={() => {
-                    setEditingAnnouncement(null);
-                    setAnnouncementForm({
-                      title: "",
-                      message: "",
-                      type: "info",
-                      targetAudience: "all",
-                      priority: "medium",
-                      expiresAt: "",
-                      discountPercentage: "",
-                      minOrderValue: "",
-                    });
-                    setShowAnnouncementModal(true);
-                  }}
+                  onClick={() => setShowAnnouncementModal(true)}
                   className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200"
                 >
                   Create Announcement
@@ -1044,22 +981,10 @@ function AdminDashboard() {
                 {announcements.map((announcement) => (
                   <div
                     key={announcement._id}
-                    className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200 relative overflow-hidden"
+                    className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200"
                   >
-                    {/* Discount Banner */}
-                    {announcement.discountPercentage > 0 && (
-                      <div className="absolute top-0 right-0 bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-bl-2xl">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold">
-                            {announcement.discountPercentage}%
-                          </div>
-                          <div className="text-xs">OFF</div>
-                        </div>
-                      </div>
-                    )}
-
                     <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1 pr-16">
+                      <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
                           <h4 className="font-bold text-lg text-gray-800">
                             {announcement.title}
@@ -1072,9 +997,7 @@ function AdminDashboard() {
                                 ? "bg-yellow-100 text-yellow-800"
                                 : announcement.type === "success"
                                 ? "bg-green-100 text-green-800"
-                                : announcement.type === "promotion"
-                                ? "bg-purple-100 text-purple-800"
-                                : "bg-red-100 text-red-800"
+                                : "bg-purple-100 text-purple-800"
                             }`}
                           >
                             {announcement.type.toUpperCase()}
@@ -1094,24 +1017,6 @@ function AdminDashboard() {
                         <p className="text-gray-600 mb-2">
                           {announcement.message}
                         </p>
-
-                        {/* Discount Details */}
-                        {announcement.discountPercentage > 0 && (
-                          <div className="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-lg p-3 mb-2">
-                            <div className="flex items-center space-x-4 text-sm">
-                              <span className="font-semibold text-orange-800">
-                                🎉 Special Offer:{" "}
-                                {announcement.discountPercentage}% Discount
-                              </span>
-                              {announcement.minOrderValue > 0 && (
-                                <span className="text-orange-600">
-                                  Min Order: ₹{announcement.minOrderValue}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
                         <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <span>Target: {announcement.targetAudience}</span>
                           <span>
@@ -1131,18 +1036,10 @@ function AdminDashboard() {
                         </div>
                       </div>
                       <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEditAnnouncement(announcement)}
-                          className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg"
-                        >
+                        <button className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg">
                           ✏️
                         </button>
-                        <button
-                          onClick={() =>
-                            handleDeleteAnnouncement(announcement._id)
-                          }
-                          className="text-red-600 hover:bg-red-50 p-2 rounded-lg"
-                        >
+                        <button className="text-red-600 hover:bg-red-50 p-2 rounded-lg">
                           🗑️
                         </button>
                       </div>
@@ -1436,9 +1333,7 @@ function AdminDashboard() {
                 <div className="p-8">
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-bold text-gray-800">
-                      {editingAnnouncement
-                        ? "Edit Announcement"
-                        : "Create Announcement"}
+                      Create Announcement
                     </h2>
                     <button
                       onClick={() => setShowAnnouncementModal(false)}
@@ -1551,52 +1446,6 @@ function AdminDashboard() {
                       </div>
                     </div>
 
-                    {/* Discount Section */}
-                    <div className="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-4">
-                      <h4 className="font-semibold text-orange-800 mb-3">
-                        🎯 Discount Settings (Optional)
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-gray-700 font-semibold mb-2">
-                            Discount Percentage
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={announcementForm.discountPercentage}
-                            onChange={(e) =>
-                              setAnnouncementForm({
-                                ...announcementForm,
-                                discountPercentage: e.target.value,
-                              })
-                            }
-                            className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                            placeholder="0"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-gray-700 font-semibold mb-2">
-                            Minimum Order Value
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={announcementForm.minOrderValue}
-                            onChange={(e) =>
-                              setAnnouncementForm({
-                                ...announcementForm,
-                                minOrderValue: e.target.value,
-                              })
-                            }
-                            className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                            placeholder="0"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
                     <div>
                       <label className="block text-gray-700 font-semibold mb-2">
                         Expires At (Optional)
@@ -1626,9 +1475,7 @@ function AdminDashboard() {
                         type="submit"
                         className="bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white px-6 py-3 rounded-xl font-semibold"
                       >
-                        {editingAnnouncement
-                          ? "Update Announcement"
-                          : "Create Announcement"}
+                        Create Announcement
                       </button>
                     </div>
                   </form>

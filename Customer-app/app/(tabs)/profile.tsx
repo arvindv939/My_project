@@ -1,37 +1,45 @@
-import React from 'react';
+'use client';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { User, MapPin, Phone, Mail, Leaf, Bell, CircleHelp as HelpCircle, Settings, LogOut, CreditCard, Truck, Star } from 'lucide-react-native';
+import {
+  User,
+  MapPin,
+  Phone,
+  Mail,
+  Leaf,
+  Bell,
+  CircleHelp as HelpCircle,
+  Settings,
+  LogOut,
+  CreditCard,
+  Truck,
+  Star,
+} from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: () => {
-            logout();
-            router.replace('/(auth)/login');
-          }
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: () => {
+          logout();
+          router.replace('/(auth)/login');
         },
-      ]
-    );
+      },
+    ]);
   };
 
   if (!user) {
@@ -64,86 +72,42 @@ export default function ProfileScreen() {
         {/* Contact Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contact Information</Text>
-          
+
           <View style={styles.infoItem}>
             <Phone size={16} color="#6B7280" />
             <Text style={styles.infoText}>{user.phone}</Text>
           </View>
-          
+
           <View style={styles.infoItem}>
             <Mail size={16} color="#6B7280" />
             <Text style={styles.infoText}>{user.email}</Text>
           </View>
-          
+
           <View style={styles.infoItem}>
             <MapPin size={16} color="#6B7280" />
             <Text style={styles.infoText}>{user.address}</Text>
           </View>
         </View>
 
-        {/* Eco Preferences */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Eco Preferences</Text>
-          
-          <View style={styles.preferenceItem}>
-            <View style={styles.preferenceInfo}>
-              <Text style={styles.preferenceText}>Reusable Packaging</Text>
-              <Text style={styles.preferenceSubtext}>Use eco-friendly packaging</Text>
-            </View>
-            <Switch
-              value={user.ecoPreferences.reusablePackaging}
-              onValueChange={() => {}}
-              trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
-              thumbColor={user.ecoPreferences.reusablePackaging ? '#16A34A' : '#F3F4F6'}
-            />
-          </View>
-          
-          <View style={styles.preferenceItem}>
-            <View style={styles.preferenceInfo}>
-              <Text style={styles.preferenceText}>Carbon Neutral Delivery</Text>
-              <Text style={styles.preferenceSubtext}>Offset delivery emissions</Text>
-            </View>
-            <Switch
-              value={user.ecoPreferences.carbonNeutralDelivery}
-              onValueChange={() => {}}
-              trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
-              thumbColor={user.ecoPreferences.carbonNeutralDelivery ? '#16A34A' : '#F3F4F6'}
-            />
-          </View>
-          
-          <View style={styles.preferenceItem}>
-            <View style={styles.preferenceInfo}>
-              <Text style={styles.preferenceText}>Organic Preference</Text>
-              <Text style={styles.preferenceSubtext}>Prioritize organic products</Text>
-            </View>
-            <Switch
-              value={user.ecoPreferences.organicPreference}
-              onValueChange={() => {}}
-              trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
-              thumbColor={user.ecoPreferences.organicPreference ? '#16A34A' : '#F3F4F6'}
-            />
-          </View>
-        </View>
-
         {/* Menu Options */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <CreditCard size={20} color="#6B7280" />
             <Text style={styles.menuText}>Payment Methods</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <Truck size={20} color="#6B7280" />
             <Text style={styles.menuText}>Delivery Addresses</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <Bell size={20} color="#6B7280" />
             <Text style={styles.menuText}>Notifications</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <Star size={20} color="#6B7280" />
             <Text style={styles.menuText}>Rate App</Text>
@@ -153,12 +117,12 @@ export default function ProfileScreen() {
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <HelpCircle size={20} color="#6B7280" />
             <Text style={styles.menuText}>Help & FAQ</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <Settings size={20} color="#6B7280" />
             <Text style={styles.menuText}>Settings</Text>
@@ -176,7 +140,9 @@ export default function ProfileScreen() {
         {/* App Info */}
         <View style={styles.appInfo}>
           <Text style={styles.appVersion}>Green Mart v1.0.0</Text>
-          <Text style={styles.appCopyright}>Making grocery shopping eco-friendly</Text>
+          <Text style={styles.appCopyright}>
+            Making grocery shopping eco-friendly
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -271,26 +237,6 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     fontFamily: 'Inter-Regular',
     flex: 1,
-  },
-  preferenceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  preferenceInfo: {
-    flex: 1,
-  },
-  preferenceText: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
-    marginBottom: 2,
-  },
-  preferenceSubtext: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontFamily: 'Inter-Regular',
   },
   menuItem: {
     flexDirection: 'row',

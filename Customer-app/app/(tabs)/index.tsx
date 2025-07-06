@@ -13,22 +13,29 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, Search, ShoppingCart, MapPin, Clock } from 'lucide-react-native';
+import {
+  Bell,
+  Search,
+  ShoppingCart,
+  MapPin,
+  Clock,
+  QrCode,
+} from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { productService, type Product } from '@/services/productService';
 import { formatIndianCurrency } from '@/utils/currency';
+import { QRScanner } from '@/components/QRScanner';
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const { items, addToCart } = useCart();
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeDiscounts, setActiveDiscounts] = useState([]);
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   useEffect(() => {
     fetchFeaturedProducts();
-    fetchActiveDiscounts();
   }, []);
 
   const fetchFeaturedProducts = async () => {
@@ -45,17 +52,74 @@ export default function HomeScreen() {
     }
   };
 
-  const fetchActiveDiscounts = async () => {
+  const handleQRScan = async (data: string) => {
     try {
-      const discounts = await productService.getActiveDiscounts();
-      setActiveDiscounts(discounts);
+      console.log('QR Code scanned:', data);
+      setShowQRScanner(false);
+
+      // Parse QR code data - expecting product ID or product URL
+      let productId = '';
+
+      if (data.includes('/product/')) {
+        // Extract product ID from URL
+        const urlParts = data.split('/product/');
+        productId = urlParts[1]?.split('?')[0] || '';
+      } else if (data.match(/^[a-fA-F0-9]{24}$/)) {
+        // Direct product ID (MongoDB ObjectId format)
+        productId = data;
+      } else {
+        Alert.alert(
+          'Invalid QR Code',
+          'This QR code is not recognized as a product code.'
+        );
+        return;
+      }
+
+      if (!productId) {
+        Alert.alert(
+          'Invalid QR Code',
+          'Could not extract product information from QR code.'
+        );
+        return;
+      }
+
+      // Fetch product details
+      const product = await productService.getProductById(productId);
+
+      if (product) {
+        // Show product details and option to add to cart
+        Alert.alert(
+          '🛍️ Product Found!',
+          `${product.name}\nPrice: ${formatIndianCurrency(product.price)}/${
+            product.unit
+          }\nStock: ${product.stock} available`,
+          [
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+            {
+              text: 'Add to Cart',
+              style: 'default',
+              onPress: () => handleAddToCart(product),
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Product Not Found',
+          'The scanned product could not be found.'
+        );
+      }
     } catch (error) {
-      console.error('Error fetching discounts:', error);
+      console.error('Error processing QR scan:', error);
+      Alert.alert('Error', 'Failed to process QR code. Please try again.');
     }
   };
 
   const handleAddToCart = (product: Product) => {
     try {
+      // Check stock before adding to cart
       if (!product.inStock || product.stock <= 0) {
         Alert.alert('Sorry', 'This product is currently out of stock.');
         return;
@@ -81,6 +145,7 @@ export default function HomeScreen() {
         quantity: 0,
       });
 
+      // Enhanced success notification
       Alert.alert(
         '✅ Added to Cart!',
         `${product.name} has been added to your cart successfully.`,
@@ -93,6 +158,7 @@ export default function HomeScreen() {
             text: 'View Cart',
             style: 'default',
             onPress: () => {
+              // Navigate to cart - you can implement navigation here
               console.log('Navigate to cart');
             },
           },
@@ -147,28 +213,6 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Active Discounts Banner */}
-        {activeDiscounts.length > 0 && (
-          <View style={styles.discountBanner}>
-            <Text style={styles.discountTitle}>🎉 Special Offers!</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {activeDiscounts.map((discount, index) => (
-                <View key={index} style={styles.discountCard}>
-                  <Text style={styles.discountPercentage}>
-                    {discount.discountPercentage}% OFF
-                  </Text>
-                  <Text style={styles.discountText}>{discount.title}</Text>
-                  {discount.minOrderValue > 0 && (
-                    <Text style={styles.discountCondition}>
-                      Min Order: ₹{discount.minOrderValue}
-                    </Text>
-                  )}
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={[styles.statCard, { backgroundColor: '#FF6B35' }]}>
@@ -186,6 +230,30 @@ export default function HomeScreen() {
           <View style={[styles.statCard, { backgroundColor: '#27AE60' }]}>
             <Text style={styles.statNumber}>15.6kg</Text>
             <Text style={styles.statLabel}>CO₂ Saved</Text>
+          </View>
+        </View>
+
+        {/* QR Scanner Banner - Updated with green theme */}
+        <View style={styles.qrScannerBanner}>
+          <View style={styles.qrBannerContent}>
+            <View style={styles.qrBannerLeft}>
+              <View style={styles.qrIconContainer}>
+                <QrCode size={32} color="#27AE60" />
+              </View>
+              <View style={styles.qrBannerText}>
+                <Text style={styles.qrBannerTitle}>QR Scanner</Text>
+                <Text style={styles.qrBannerSubtitle}>
+                  Scan products in-store to add to cart instantly!
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.qrScanButton}
+              onPress={() => setShowQRScanner(true)}
+            >
+              <QrCode size={20} color="#ffffff" />
+              <Text style={styles.qrScanButtonText}>Scan</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -251,26 +319,12 @@ export default function HomeScreen() {
                   }}
                   style={styles.productImage}
                 />
-                {product.discountPercentage &&
-                  product.discountPercentage > 0 && (
-                    <View style={styles.discountBadge}>
-                      <Text style={styles.discountBadgeText}>
-                        {product.discountPercentage}% OFF
-                      </Text>
-                    </View>
-                  )}
                 <View style={styles.productInfo}>
                   <Text style={styles.productName}>{product.name}</Text>
                   <View style={styles.productPriceRow}>
                     <Text style={styles.productPrice}>
                       {formatIndianCurrency(product.price)}
                     </Text>
-                    {product.originalPrice &&
-                      product.originalPrice > product.price && (
-                        <Text style={styles.originalPrice}>
-                          {formatIndianCurrency(product.originalPrice)}
-                        </Text>
-                      )}
                     <Text style={styles.productUnit}>/{product.unit}</Text>
                   </View>
                   <Text style={styles.stockInfo}>Stock: {product.stock}</Text>
@@ -294,26 +348,18 @@ export default function HomeScreen() {
 
         {/* Impact Section */}
         <View style={styles.impactSection}>
-          <Text style={styles.impactTitle}>🌱 Your Eco Impact This Month</Text>
+          <Text style={styles.impactTitle}>🌱Aravind (Pes Univeristy)</Text>
           <View style={styles.impactStats}>
-            <View style={styles.impactStat}>
-              <Text style={styles.impactNumber}>15</Text>
-              <Text style={styles.impactLabel}>Plastic bags saved</Text>
-            </View>
-            <View style={styles.impactStat}>
-              <Text style={styles.impactNumber}>2.3kg</Text>
-              <Text style={styles.impactLabel}>Carbon footprint</Text>
-            </View>
-            <View style={styles.impactStat}>
-              <Text style={styles.impactNumber}>8</Text>
-              <Text style={styles.impactLabel}>Trees planted</Text>
-            </View>
           </View>
-          <TouchableOpacity style={styles.learnMoreButton}>
-            <Text style={styles.learnMoreText}>Learn More →</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* QR Scanner Modal */}
+      <QRScanner
+        isVisible={showQRScanner}
+        onScan={handleQRScan}
+        onClose={() => setShowQRScanner(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -387,45 +433,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
   },
-  discountBanner: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FFB74D',
-  },
-  discountTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#E65100',
-    marginBottom: 12,
-  },
-  discountCard: {
-    backgroundColor: '#FF5722',
-    borderRadius: 8,
-    padding: 12,
-    marginRight: 12,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  discountPercentage: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  discountText: {
-    fontSize: 12,
-    color: '#ffffff',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  discountCondition: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
-  },
   statsContainer: {
     flexDirection: 'row',
     gap: 12,
@@ -447,6 +454,75 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.9)',
+  },
+  // QR Scanner Banner Styles - Updated with green theme
+  qrScannerBanner: {
+    backgroundColor: '#F0F9F0',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#27AE60',
+    shadowColor: '#27AE60',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  qrBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  qrBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  qrIconContainer: {
+    backgroundColor: '#E8F5E8',
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 16,
+  },
+  qrBannerText: {
+    flex: 1,
+  },
+  qrBannerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  qrBannerSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  qrScanButton: {
+    backgroundColor: '#27AE60',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#27AE60',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  qrScanButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   sectionTitle: {
     fontSize: 18,
@@ -549,26 +625,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    position: 'relative',
   },
   productImage: {
     width: '100%',
     height: 80,
     backgroundColor: '#F5F5F5',
-  },
-  discountBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#E74C3C',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  discountBadgeText: {
-    fontSize: 10,
-    color: '#ffffff',
-    fontWeight: 'bold',
   },
   productInfo: {
     padding: 12,
@@ -588,12 +649,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#27AE60',
-  },
-  originalPrice: {
-    fontSize: 12,
-    color: '#999',
-    textDecorationLine: 'line-through',
-    marginLeft: 4,
   },
   productUnit: {
     fontSize: 12,

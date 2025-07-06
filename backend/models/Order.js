@@ -26,7 +26,7 @@ const orderSchema = new mongoose.Schema(
   {
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // This fixes the populate error
+      ref: "User",
       required: true,
     },
     items: [orderItemSchema],
@@ -46,6 +46,19 @@ const orderSchema = new mongoose.Schema(
         "cancelled",
       ],
       default: "pending",
+    },
+    orderType: {
+      type: String,
+      enum: ["online", "offline"],
+      default: "online",
+    },
+    fulfillmentMethod: {
+      type: String,
+      enum: ["delivery", "pickup"],
+      default: "delivery",
+    },
+    storeLocation: {
+      type: String,
     },
     deliveryAddress: {
       street: String,
@@ -72,5 +85,17 @@ const orderSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Add virtual for customer reference (backward compatibility)
+orderSchema.virtual("customer", {
+  ref: "User",
+  localField: "customerId",
+  foreignField: "_id",
+  justOne: true,
+});
+
+// Ensure virtual fields are serialized
+orderSchema.set("toJSON", { virtuals: true });
+orderSchema.set("toObject", { virtuals: true });
 
 module.exports = mongoose.model("Order", orderSchema);

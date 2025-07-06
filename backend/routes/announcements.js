@@ -1,51 +1,41 @@
 const express = require("express");
 const router = express.Router();
-const announcementController = require("../controllers/announcementController");
+const {
+  getAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+  getAnnouncementById,
+  markAsRead,
+  getAnnouncementStats,
+} = require("../controllers/announcementController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const roleMiddleware = require("../middlewares/roleMiddleware");
 
-// Get all announcements
-router.get("/", authMiddleware, announcementController.getAnnouncements);
-
-// Get single announcement
-router.get("/:id", authMiddleware, announcementController.getAnnouncement);
-
-// Create announcement (Admin only)
-router.post(
-  "/",
+// Public routes (with authentication)
+router.get("/", authMiddleware, getAnnouncements);
+router.get(
+  "/stats",
   authMiddleware,
-  roleMiddleware(["admin"]),
-  announcementController.createAnnouncement
+  roleMiddleware(["Admin"]),
+  getAnnouncementStats
 );
+router.get("/:id", authMiddleware, getAnnouncementById);
+router.put("/:id/read", authMiddleware, markAsRead);
 
-// Update announcement
+// Admin only routes
+router.post("/", authMiddleware, roleMiddleware(["Admin"]), createAnnouncement);
 router.put(
   "/:id",
   authMiddleware,
-  roleMiddleware(["admin"]),
-  announcementController.updateAnnouncement
+  roleMiddleware(["Admin"]),
+  updateAnnouncement
 );
-
-// Delete announcement
 router.delete(
   "/:id",
   authMiddleware,
-  roleMiddleware(["admin"]),
-  announcementController.deleteAnnouncement
+  roleMiddleware(["Admin"]),
+  deleteAnnouncement
 );
-
-// Mark announcement as read
-router.post("/:id/read", authMiddleware, announcementController.markAsRead);
-
-// Get announcement statistics
-router.get(
-  "/stats/summary",
-  authMiddleware,
-  roleMiddleware(["admin"]),
-  announcementController.getAnnouncementStats
-);
-
-// Get active discounts
-router.get("/discounts/active", announcementController.getActiveDiscounts);
 
 module.exports = router;
