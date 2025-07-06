@@ -9,7 +9,6 @@ import OrderTable from "../components/OrderTable";
 
 // Backend API URL
 const API_URL = "http://localhost:5000/api/products";
-const PROMOTIONS_API_URL = "http://localhost:5000/api/promotions";
 
 // Cloudinary config
 const CLOUDINARY_UPLOAD_PRESET = "Green_Mart_product_images";
@@ -18,7 +17,6 @@ const CLOUDINARY_CLOUD_NAME = "dum3uhmau";
 const TABS = [
   { label: "Inventory Management", icon: "📦" },
   { label: "Product Analytics", icon: "📊" },
-  { label: "Promotions & Offers", icon: "🎯" },
   { label: "Order Management", icon: "🚚" },
 ];
 
@@ -77,7 +75,6 @@ const ShopOwnerDashboard = () => {
   const [tab, setTab] = useState(TABS[0].label);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [promotions, setPromotions] = useState([]);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
   const [showToast, setShowToast] = useState(false);
@@ -96,21 +93,8 @@ const ShopOwnerDashboard = () => {
   const [editingId, setEditingId] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
-  const [showPromotionModal, setShowPromotionModal] = useState(false);
   const [selectedProductForQR, setSelectedProductForQR] = useState(null);
   const csvInput = useRef(null);
-
-  // Promotion form state
-  const [promotionForm, setPromotionForm] = useState({
-    type: "flash_sale",
-    title: "",
-    description: "",
-    discountPercentage: "",
-    startDate: "",
-    endDate: "",
-    applicableProducts: [],
-    minOrderValue: "",
-  });
 
   // Store last known order count for detecting new orders
   const [lastOrderCount, setLastOrderCount] = useState(0);
@@ -129,7 +113,6 @@ const ShopOwnerDashboard = () => {
   useEffect(() => {
     fetchProducts();
     fetchOrders();
-    fetchPromotions();
   }, []);
 
   useEffect(() => {
@@ -206,25 +189,6 @@ const ShopOwnerDashboard = () => {
     } catch (err) {
       console.error("Error loading orders:", err);
       setOrders([]);
-    }
-  }
-
-  async function fetchPromotions() {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      console.log("Fetching promotions...");
-
-      const res = await axios.get(PROMOTIONS_API_URL, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      console.log("Promotions response:", res.data);
-      setPromotions(res.data.promotions || []);
-    } catch (err) {
-      console.error("Error loading promotions:", err);
-      setPromotions([]); // Set empty array as fallback
     }
   }
 
@@ -373,85 +337,6 @@ const ShopOwnerDashboard = () => {
       } else {
         errorMessage = err.message || "Unexpected error occurred";
         console.error("Unexpected error:", err.message);
-      }
-
-      showToastMsg(errorMessage, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handlePromotionSubmit(e) {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      console.log("Creating promotion with data:", promotionForm);
-
-      // Validate required fields
-      if (!promotionForm.title.trim()) {
-        showToastMsg("Promotion title is required", "error");
-        return;
-      }
-      if (
-        !promotionForm.discountPercentage ||
-        Number(promotionForm.discountPercentage) <= 0
-      ) {
-        showToastMsg("Please enter a valid discount percentage", "error");
-        return;
-      }
-      if (!promotionForm.startDate) {
-        showToastMsg("Start date is required", "error");
-        return;
-      }
-      if (!promotionForm.endDate) {
-        showToastMsg("End date is required", "error");
-        return;
-      }
-
-      const token = localStorage.getItem("token");
-      if (!token) {
-        showToastMsg("Authentication required. Please login again.", "error");
-        return;
-      }
-
-      const response = await axios.post(PROMOTIONS_API_URL, promotionForm, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      console.log("Promotion created:", response.data);
-
-      showToastMsg("Promotion created successfully!", "success");
-      setShowPromotionModal(false);
-      setPromotionForm({
-        type: "flash_sale",
-        title: "",
-        description: "",
-        discountPercentage: "",
-        startDate: "",
-        endDate: "",
-        applicableProducts: [],
-        minOrderValue: "",
-      });
-      await fetchPromotions();
-    } catch (err) {
-      console.error("Error creating promotion:", err);
-
-      let errorMessage = "Error creating promotion";
-
-      if (err.response) {
-        errorMessage =
-          err.response.data?.message ||
-          err.response.data?.error ||
-          `Server error: ${err.response.status}`;
-        console.error("Server error details:", err.response.data);
-      } else if (err.request) {
-        errorMessage = "Network error. Please check your connection.";
-      } else {
-        errorMessage = err.message || "Unexpected error occurred";
       }
 
       showToastMsg(errorMessage, "error");
@@ -785,15 +670,6 @@ const ShopOwnerDashboard = () => {
           >
             💰 Price Update
           </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg"
-            onClick={() => setShowPromotionModal(true)}
-            disabled={loading}
-          >
-            🎯 Create Promotion
-          </motion.button>
         </div>
       </motion.div>
 
@@ -1110,154 +986,6 @@ const ShopOwnerDashboard = () => {
             </motion.div>
           )}
 
-          {tab === "Promotions & Offers" && (
-            <motion.div
-              key="promotions"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.25 }}
-            >
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="font-bold text-2xl text-gray-800">
-                    Promotions & Offers
-                  </h2>
-                  <p className="text-gray-600">
-                    Create and manage special offers to boost sales
-                  </p>
-                </div>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowPromotionModal(true)}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 text-white font-bold px-6 py-3 rounded-xl flex items-center space-x-2 shadow-lg"
-                >
-                  <span className="text-xl">🎯</span>
-                  <span>Create Promotion</span>
-                </motion.button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <motion.div
-                  whileHover={{ scale: 1.02, y: -5 }}
-                  className="border-2 border-dashed border-red-300 rounded-2xl p-8 flex flex-col items-center cursor-pointer hover:border-red-500 bg-gradient-to-br from-red-50 to-red-100"
-                  onClick={() => {
-                    setPromotionForm({ ...promotionForm, type: "flash_sale" });
-                    setShowPromotionModal(true);
-                  }}
-                >
-                  <span className="text-4xl mb-4">⚡</span>
-                  <span className="font-bold text-lg text-red-700">
-                    Flash Sale
-                  </span>
-                  <span className="text-sm text-red-600 text-center mt-2">
-                    Limited time offers with high discounts
-                  </span>
-                </motion.div>
-
-                <motion.div
-                  whileHover={{ scale: 1.02, y: -5 }}
-                  className="border-2 border-dashed border-green-300 rounded-2xl p-8 flex flex-col items-center cursor-pointer hover:border-green-500 bg-gradient-to-br from-green-50 to-green-100"
-                  onClick={() => {
-                    setPromotionForm({
-                      ...promotionForm,
-                      type: "bundle_offer",
-                    });
-                    setShowPromotionModal(true);
-                  }}
-                >
-                  <span className="text-4xl mb-4">📦</span>
-                  <span className="font-bold text-lg text-green-700">
-                    Bundle Offer
-                  </span>
-                  <span className="text-sm text-green-600 text-center mt-2">
-                    Combine products for better deals
-                  </span>
-                </motion.div>
-
-                <motion.div
-                  whileHover={{ scale: 1.02, y: -5 }}
-                  className="border-2 border-dashed border-yellow-300 rounded-2xl p-8 flex flex-col items-center cursor-pointer hover:border-yellow-500 bg-gradient-to-br from-yellow-50 to-yellow-100"
-                  onClick={() => {
-                    setPromotionForm({
-                      ...promotionForm,
-                      type: "seasonal_discount",
-                    });
-                    setShowPromotionModal(true);
-                  }}
-                >
-                  <span className="text-4xl mb-4">🌟</span>
-                  <span className="font-bold text-lg text-yellow-700">
-                    Seasonal Discount
-                  </span>
-                  <span className="text-sm text-yellow-600 text-center mt-2">
-                    Holiday and seasonal promotions
-                  </span>
-                </motion.div>
-              </div>
-
-              {/* Active Promotions */}
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-6">
-                <h4 className="font-bold text-lg mb-4 text-gray-800">
-                  Active Promotions
-                </h4>
-                {promotions.length > 0 ? (
-                  <div className="space-y-4">
-                    {promotions.map((promotion, index) => (
-                      <motion.div
-                        key={promotion._id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
-                      >
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h5 className="font-bold text-lg text-gray-800">
-                              {promotion.title}
-                            </h5>
-                            <p className="text-gray-600">
-                              {promotion.description}
-                            </p>
-                            <div className="flex items-center space-x-4 mt-2">
-                              <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                {promotion.type.replace("_", " ").toUpperCase()}
-                              </span>
-                              <span className="text-sm text-green-600 font-semibold">
-                                {promotion.discountPercentage}% OFF
-                              </span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm text-gray-500">
-                              {new Date(
-                                promotion.startDate
-                              ).toLocaleDateString()}{" "}
-                              -{" "}
-                              {new Date(promotion.endDate).toLocaleDateString()}
-                            </p>
-                            <span className="inline-block mt-2 px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                              Active
-                            </span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <span className="text-4xl mb-4 block">🎯</span>
-                    <p className="text-gray-500">
-                      No active promotions. Create your first promotion to boost
-                      sales!
-                    </p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-
           {tab === "Order Management" && (
             <motion.div
               key="orders"
@@ -1524,6 +1252,7 @@ const ShopOwnerDashboard = () => {
                                 // eslint-disable-next-line no-constant-binary-expression
                                 URL.createObjectURL(form.image) ||
                                 "/placeholder.svg" ||
+                                "/placeholder.svg" ||
                                 "/placeholder.svg"
                               }
                               alt="Preview"
@@ -1571,203 +1300,6 @@ const ShopOwnerDashboard = () => {
                         : editingId
                         ? "Update Product"
                         : "Add Product"}
-                    </motion.button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Promotion Modal */}
-      <AnimatePresence>
-        {showPromotionModal && (
-          <motion.div
-            key="promotionModal"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 z-40 flex justify-center items-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-            >
-              <div className="p-8">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-gray-800">
-                    Create New Promotion
-                  </h2>
-                  <button
-                    className="text-gray-500 hover:text-red-600 text-2xl"
-                    onClick={() => setShowPromotionModal(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <form onSubmit={handlePromotionSubmit} className="space-y-6">
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2">
-                      Promotion Type*
-                    </label>
-                    <select
-                      className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      required
-                      value={promotionForm.type}
-                      onChange={(e) =>
-                        setPromotionForm({
-                          ...promotionForm,
-                          type: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="flash_sale">Flash Sale</option>
-                      <option value="bundle_offer">Bundle Offer</option>
-                      <option value="seasonal_discount">
-                        Seasonal Discount
-                      </option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2">
-                      Title*
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      required
-                      value={promotionForm.title}
-                      onChange={(e) =>
-                        setPromotionForm({
-                          ...promotionForm,
-                          title: e.target.value,
-                        })
-                      }
-                      placeholder="Enter promotion title"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-semibold mb-2">
-                      Description
-                    </label>
-                    <textarea
-                      className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      rows={3}
-                      value={promotionForm.description}
-                      onChange={(e) =>
-                        setPromotionForm({
-                          ...promotionForm,
-                          description: e.target.value,
-                        })
-                      }
-                      placeholder="Describe your promotion"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-gray-700 font-semibold mb-2">
-                        Discount Percentage*
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        required
-                        value={promotionForm.discountPercentage}
-                        onChange={(e) =>
-                          setPromotionForm({
-                            ...promotionForm,
-                            discountPercentage: e.target.value,
-                          })
-                        }
-                        placeholder="0"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-gray-700 font-semibold mb-2">
-                        Minimum Order Value
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        value={promotionForm.minOrderValue}
-                        onChange={(e) =>
-                          setPromotionForm({
-                            ...promotionForm,
-                            minOrderValue: e.target.value,
-                          })
-                        }
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-gray-700 font-semibold mb-2">
-                        Start Date*
-                      </label>
-                      <input
-                        type="datetime-local"
-                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        required
-                        value={promotionForm.startDate}
-                        onChange={(e) =>
-                          setPromotionForm({
-                            ...promotionForm,
-                            startDate: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-gray-700 font-semibold mb-2">
-                        End Date*
-                      </label>
-                      <input
-                        type="datetime-local"
-                        className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                        required
-                        value={promotionForm.endDate}
-                        onChange={(e) =>
-                          setPromotionForm({
-                            ...promotionForm,
-                            endDate: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end space-x-4 pt-6">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      type="button"
-                      className="bg-gray-300 hover:bg-gray-400 px-6 py-3 rounded-xl font-semibold"
-                      onClick={() => setShowPromotionModal(false)}
-                    >
-                      Cancel
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      type="submit"
-                      className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl font-semibold disabled:opacity-50"
-                      disabled={loading}
-                    >
-                      {loading ? "Creating..." : "Create Promotion"}
                     </motion.button>
                   </div>
                 </form>

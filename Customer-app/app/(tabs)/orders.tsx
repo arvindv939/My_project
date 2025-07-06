@@ -38,6 +38,8 @@ const getStatusIcon = (status: string) => {
       return <CheckCircle size={20} color="#10B981" />;
     case 'preparing':
       return <Package size={20} color="#3B82F6" />;
+    case 'ready':
+      return <CheckCircle size={20} color="#8B5CF6" />;
     case 'out_for_delivery':
       return <Truck size={20} color="#8B5CF6" />;
     case 'delivered':
@@ -57,6 +59,8 @@ const getStatusColor = (status: string) => {
       return '#10B981';
     case 'preparing':
       return '#3B82F6';
+    case 'ready':
+      return '#8B5CF6';
     case 'out_for_delivery':
       return '#8B5CF6';
     case 'delivered':
@@ -74,6 +78,15 @@ const formatStatus = (status: string) => {
 
 export default function OrdersScreen() {
   const { user, token } = useAuth();
+  const { addToCart } = useCart();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<
+    'pending' | 'delivered' | 'cancelled' | 'payment'
+  >('pending');
+  const [timingServiceReady, setTimingServiceReady] = useState(false);
+
   if (!user || !token) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -83,14 +96,6 @@ export default function OrdersScreen() {
       </View>
     );
   }
-  const { addToCart } = useCart();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<
-    'pending' | 'delivered' | 'cancelled' | 'payment'
-  >('pending');
-  const [timingServiceReady, setTimingServiceReady] = useState(false);
 
   useEffect(() => {
     // Initialize timing service and fetch orders
@@ -107,6 +112,15 @@ export default function OrdersScreen() {
     };
 
     initializeServices();
+  }, []);
+
+  // Auto-refresh orders every 3 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const fetchOrders = async () => {
@@ -155,13 +169,23 @@ export default function OrdersScreen() {
         completed: [
           'confirmed',
           'preparing',
+          'ready',
           'out_for_delivery',
           'delivered',
         ].includes(status.toLowerCase()),
       },
       {
         step: 'Preparing',
-        completed: ['preparing', 'out_for_delivery', 'delivered'].includes(
+        completed: [
+          'preparing',
+          'ready',
+          'out_for_delivery',
+          'delivered',
+        ].includes(status.toLowerCase()),
+      },
+      {
+        step: 'Ready for Pickup',
+        completed: ['ready', 'out_for_delivery', 'delivered'].includes(
           status.toLowerCase()
         ),
       },
@@ -279,8 +303,9 @@ export default function OrdersScreen() {
     }
   };
 
+  // Fixed order filtering to include 'ready' status
   const pendingOrders = orders.filter((order) =>
-    ['pending', 'confirmed', 'preparing', 'out_for_delivery'].includes(
+    ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(
       order.status.toLowerCase()
     )
   );

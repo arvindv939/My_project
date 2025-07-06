@@ -61,6 +61,23 @@ const announcementSchema = new mongoose.Schema(
         type: String, // URLs to images or documents
       },
     ],
+    // Discount/Promotion fields
+    discountPercentage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    applicableProducts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+      },
+    ],
+    minOrderValue: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -70,5 +87,6 @@ const announcementSchema = new mongoose.Schema(
 // Index for efficient queries
 announcementSchema.index({ targetAudience: 1, isActive: 1, expiresAt: 1 });
 announcementSchema.index({ createdAt: -1 });
+announcementSchema.index({ type: 1, discountPercentage: 1 });
 
 module.exports = mongoose.model("Announcement", announcementSchema);

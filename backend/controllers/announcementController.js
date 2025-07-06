@@ -112,6 +112,9 @@ exports.createAnnouncement = async (req, res) => {
       targetBranches,
       expiresAt,
       attachments,
+      discountPercentage,
+      applicableProducts,
+      minOrderValue,
     } = req.body;
 
     // Validate required fields
@@ -132,6 +135,9 @@ exports.createAnnouncement = async (req, res) => {
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       attachments: attachments || [],
       createdBy: req.user.id,
+      discountPercentage: discountPercentage || 0,
+      applicableProducts: applicableProducts || [],
+      minOrderValue: minOrderValue || 0,
     });
 
     await announcement.save();
@@ -171,7 +177,7 @@ exports.updateAnnouncement = async (req, res) => {
     // Check if user has permission to update
     if (
       announcement.createdBy.toString() !== req.user.id &&
-      req.user.role !== "admin"
+      req.user.role !== "Admin"
     ) {
       return res.status(403).json({
         success: false,
@@ -218,7 +224,7 @@ exports.deleteAnnouncement = async (req, res) => {
     // Check if user has permission to delete
     if (
       announcement.createdBy.toString() !== req.user.id &&
-      req.user.role !== "admin"
+      req.user.role !== "Admin"
     ) {
       return res.status(403).json({
         success: false,
@@ -330,6 +336,31 @@ exports.getAnnouncementStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error fetching announcement stats",
+      error: error.message,
+    });
+  }
+};
+
+// Get active discounts for customers and shop owners
+exports.getActiveDiscounts = async (req, res) => {
+  try {
+    const now = new Date();
+    const activeDiscounts = await Announcement.find({
+      type: "promotion",
+      isActive: true,
+      discountPercentage: { $gt: 0 },
+      $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gte: now } }],
+    }).populate("createdBy", "name");
+
+    res.json({
+      success: true,
+      discounts: activeDiscounts,
+    });
+  } catch (error) {
+    console.error("Error fetching active discounts:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching active discounts",
       error: error.message,
     });
   }

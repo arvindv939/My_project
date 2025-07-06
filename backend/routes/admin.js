@@ -99,7 +99,7 @@ router.get(
   getUserAnalytics
 );
 
-// Update user role
+// Update user role (excluding worker)
 router.put(
   "/users/:id/role",
   authMiddleware,
@@ -107,6 +107,12 @@ router.put(
   async (req, res) => {
     try {
       const { role } = req.body;
+
+      // Only allow Customer, ShopOwner, Admin roles
+      if (!["Customer", "ShopOwner", "Admin"].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+
       const user = await User.findByIdAndUpdate(
         req.params.id,
         { role },

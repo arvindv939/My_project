@@ -159,6 +159,16 @@ const OrderTable = ({ orders, handleOrderStatusUpdate }) => {
   const [orderTimings, setOrderTimings] = useState(new Map());
   const [showOrderDetails, setShowOrderDetails] = useState(null);
 
+  // Auto-refresh orders every 2 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Force re-render to update timers and status
+      setStatusMap((prev) => ({ ...prev }));
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Initialize order timings when orders are loaded
   useEffect(() => {
     orders.forEach((order) => {

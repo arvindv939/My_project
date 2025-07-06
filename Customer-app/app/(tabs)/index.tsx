@@ -24,16 +24,18 @@ export default function HomeScreen() {
   const { items, addToCart } = useCart();
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeDiscounts, setActiveDiscounts] = useState([]);
 
   useEffect(() => {
     fetchFeaturedProducts();
+    fetchActiveDiscounts();
   }, []);
 
   const fetchFeaturedProducts = async () => {
     try {
       setLoading(true);
       const products = await productService.getAllProducts({ limit: 6 });
-      console.log('Fetched products:', products); // Debug log
+      console.log('Fetched products:', products);
       setFeaturedProducts(products);
     } catch (error) {
       console.error('Error fetching featured products:', error);
@@ -43,9 +45,17 @@ export default function HomeScreen() {
     }
   };
 
+  const fetchActiveDiscounts = async () => {
+    try {
+      const discounts = await productService.getActiveDiscounts();
+      setActiveDiscounts(discounts);
+    } catch (error) {
+      console.error('Error fetching discounts:', error);
+    }
+  };
+
   const handleAddToCart = (product: Product) => {
     try {
-      // Check stock before adding to cart
       if (!product.inStock || product.stock <= 0) {
         Alert.alert('Sorry', 'This product is currently out of stock.');
         return;
@@ -71,7 +81,6 @@ export default function HomeScreen() {
         quantity: 0,
       });
 
-      // Enhanced success notification
       Alert.alert(
         '✅ Added to Cart!',
         `${product.name} has been added to your cart successfully.`,
@@ -84,7 +93,6 @@ export default function HomeScreen() {
             text: 'View Cart',
             style: 'default',
             onPress: () => {
-              // Navigate to cart - you can implement navigation here
               console.log('Navigate to cart');
             },
           },
@@ -139,6 +147,28 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Active Discounts Banner */}
+        {activeDiscounts.length > 0 && (
+          <View style={styles.discountBanner}>
+            <Text style={styles.discountTitle}>🎉 Special Offers!</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {activeDiscounts.map((discount, index) => (
+                <View key={index} style={styles.discountCard}>
+                  <Text style={styles.discountPercentage}>
+                    {discount.discountPercentage}% OFF
+                  </Text>
+                  <Text style={styles.discountText}>{discount.title}</Text>
+                  {discount.minOrderValue > 0 && (
+                    <Text style={styles.discountCondition}>
+                      Min Order: ₹{discount.minOrderValue}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={[styles.statCard, { backgroundColor: '#FF6B35' }]}>
@@ -221,12 +251,26 @@ export default function HomeScreen() {
                   }}
                   style={styles.productImage}
                 />
+                {product.discountPercentage &&
+                  product.discountPercentage > 0 && (
+                    <View style={styles.discountBadge}>
+                      <Text style={styles.discountBadgeText}>
+                        {product.discountPercentage}% OFF
+                      </Text>
+                    </View>
+                  )}
                 <View style={styles.productInfo}>
                   <Text style={styles.productName}>{product.name}</Text>
                   <View style={styles.productPriceRow}>
                     <Text style={styles.productPrice}>
                       {formatIndianCurrency(product.price)}
                     </Text>
+                    {product.originalPrice &&
+                      product.originalPrice > product.price && (
+                        <Text style={styles.originalPrice}>
+                          {formatIndianCurrency(product.originalPrice)}
+                        </Text>
+                      )}
                     <Text style={styles.productUnit}>/{product.unit}</Text>
                   </View>
                   <Text style={styles.stockInfo}>Stock: {product.stock}</Text>
@@ -342,6 +386,45 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  discountBanner: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+  },
+  discountTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#E65100',
+    marginBottom: 12,
+  },
+  discountCard: {
+    backgroundColor: '#FF5722',
+    borderRadius: 8,
+    padding: 12,
+    marginRight: 12,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  discountPercentage: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  discountText: {
+    fontSize: 12,
+    color: '#ffffff',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  discountCondition: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -466,11 +549,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    position: 'relative',
   },
   productImage: {
     width: '100%',
     height: 80,
     backgroundColor: '#F5F5F5',
+  },
+  discountBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#E74C3C',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  discountBadgeText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
   productInfo: {
     padding: 12,
@@ -490,6 +588,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#27AE60',
+  },
+  originalPrice: {
+    fontSize: 12,
+    color: '#999',
+    textDecorationLine: 'line-through',
+    marginLeft: 4,
   },
   productUnit: {
     fontSize: 12,

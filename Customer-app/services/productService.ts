@@ -1,172 +1,170 @@
-import API from '@/utils/api';
+import { API_BASE_URL } from '@/utils/api';
 
 export interface Product {
   _id: string;
   name: string;
   description?: string;
-  price: number;
   category: string;
-  imageUrl?: string;
-  stock: number;
   unit: string;
-  isOrganic?: boolean;
-  ecoFriendly?: boolean;
-  inStock: boolean;
-  isActive?: boolean;
-  rating?: number;
-  reviews?: number;
-  createdAt?: string;
-  updatedAt?: string;
+  price: number;
   originalPrice?: number;
   discount?: number;
+  stock: number;
+  imageUrl?: string;
+  images?: string[];
+  rating?: number;
+  reviews?: number;
+  views?: number;
+  isActive?: boolean;
+  createdBy: string;
+  shop?: string;
+  inStock: boolean;
+  isOrganic?: boolean;
+  ecoFriendly?: boolean;
+  discountPercentage?: number; // From announcements
 }
 
-interface ProductFilters {
+export interface ProductFilters {
   category?: string;
   search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
   limit?: number;
   page?: number;
 }
 
-interface ProductResponse {
-  success: boolean;
-  products: any[];
-  totalPages: number;
-  currentPage: number;
-  total: number;
+export interface Discount {
+  _id: string;
+  title: string;
+  discountPercentage: number;
+  minOrderValue: number;
+  expiresAt?: string;
+  type: string;
+  targetAudience: string;
 }
 
 class ProductService {
-  private transformProduct(backendProduct: any): Product {
-    // Fix the stock checking logic
-    const stockValue = Number(backendProduct.stock) || 0;
-    const isActiveValue = backendProduct.isActive !== false; // Default to true if not explicitly false
-    const inStockValue = stockValue > 0 && isActiveValue;
-
-    const product: Product = {
-      _id: backendProduct._id || backendProduct.id,
-      name: backendProduct.name || '',
-      description: backendProduct.description || '',
-      price: Number(backendProduct.price) || 0,
-      category: backendProduct.category || 'General',
-      imageUrl: backendProduct.imageUrl || backendProduct.image,
-      stock: stockValue,
-      unit: backendProduct.unit || 'kg',
-      isOrganic: Boolean(backendProduct.isOrganic),
-      ecoFriendly: Boolean(backendProduct.ecoFriendly),
-      inStock: inStockValue,
-      isActive: isActiveValue,
-      rating:
-        Number(backendProduct.rating?.average || backendProduct.rating) || 4.5,
-      reviews:
-        Number(backendProduct.rating?.count || backendProduct.reviews) || 0,
-      createdAt: backendProduct.createdAt,
-      updatedAt: backendProduct.updatedAt,
-      originalPrice: backendProduct.originalPrice,
-      discount: Number(backendProduct.discount) || 0,
-    };
-
-    console.log('ProductService: Transformed product:', {
-      name: product.name,
-      stock: product.stock,
-      isActive: product.isActive,
-      inStock: product.inStock,
-      rawStock: backendProduct.stock,
-      rawIsActive: backendProduct.isActive,
-    });
-
-    return product;
-  }
+  private baseUrl = `${API_BASE_URL}/products`;
+  private announcementsUrl = `${API_BASE_URL}/announcements`;
 
   async getAllProducts(filters: ProductFilters = {}): Promise<Product[]> {
     try {
-      console.log('ProductService: Fetching products with filters:', filters);
+      const queryParams = new URLSearchParams();
 
-      const params = new URLSearchParams();
-      if (filters.category) params.append('category', filters.category);
-      if (filters.search) params.append('search', filters.search);
-      if (filters.limit) params.append('limit', filters.limit.toString());
-      if (filters.page) params.append('page', filters.page.toString());
+      if (filters.category) queryParams.append('category', filters.category);
+      if (filters.search) queryParams.append('search', filters.search);
+      if (filters.minPrice)
+        queryParams.append('minPrice', filters.minPrice.toString());
+      if (filters.maxPrice)
+        queryParams.append('maxPrice', filters.maxPrice.toString());
+      if (filters.inStock !== undefined)
+        queryParams.append('inStock', filters.inStock.toString());
+      if (filters.limit) queryParams.append('limit', filters.limit.toString());
+      if (filters.page) queryParams.append('page', filters.page.toString());
 
-      const endpoint = `/products${
-        params.toString() ? `?${params.toString()}` : ''
-      }`;
-      console.log('ProductService: Making request to:', endpoint);
+      const response = await fetch(`${this.baseUrl}/public?${queryParams}`);
 
-      const response = await API.get(endpoint);
-      console.log('ProductService: Raw response:', response.data);
-
-      const data: ProductResponse = response.data;
-
-      if (data.success && Array.isArray(data.products)) {
-        const transformedProducts = data.products.map((product) =>
-          this.transformProduct(product)
-        );
-
-        console.log(
-          'ProductService: Returning',
-          transformedProducts.length,
-          'products'
-        );
-        console.log(
-          'ProductService: Sample product data:',
-          transformedProducts[0]
-        );
-        return transformedProducts;
-      } else {
-        console.warn('ProductService: Unexpected response format:', data);
-        return [];
-      }
-    } catch (error: any) {
-      console.error('ProductService: Error fetching products:', error);
-
-      if (error.response) {
-        console.error('ProductService: Error response:', error.response.data);
-        console.error('ProductService: Error status:', error.response.status);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      if (error.response?.status === 404) {
-        return [];
-      }
+      const data = await response.json();
 
-      throw error;
+      // Get active discounts and apply them
+      const discounts = await this.getActiveDiscounts();
+      const productsWithDiscounts = this.applyDiscounts(data, discounts);
+
+      return Array.isArray(productsWithDiscounts) ? productsWithDiscounts : [];
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      return [];
     }
   }
 
-  async getProductById(id: string): Promise<Product | null> {
+  async getActiveDiscounts(): Promise<Discount[]> {
     try {
-      console.log('ProductService: Fetching product by ID:', id);
-      const response = await API.get(`/products/${id}`);
-      console.log('ProductService: Product response:', response.data);
+      const response = await fetch(`${this.announcementsUrl}/discounts/active`);
 
-      const data = response.data;
-
-      if (data.success && data.product) {
-        return this.transformProduct(data.product);
-      } else if (data && !data.success) {
-        return this.transformProduct(data);
+      if (!response.ok) {
+        return [];
       }
 
-      return null;
-    } catch (error: any) {
-      console.error('ProductService: Error fetching product by ID:', error);
-
-      if (error.response?.status === 404) {
-        return null;
-      }
-
-      throw error;
+      const data = await response.json();
+      return data.discounts || [];
+    } catch (error) {
+      console.error('Error fetching discounts:', error);
+      return [];
     }
+  }
+
+  private applyDiscounts(
+    products: Product[],
+    discounts: Discount[]
+  ): Product[] {
+    return products.map((product) => {
+      // Find applicable discount
+      const applicableDiscount = discounts.find((discount) => {
+        const now = new Date();
+        const expiresAt = discount.expiresAt
+          ? new Date(discount.expiresAt)
+          : null;
+
+        // Check if discount is still valid
+        if (expiresAt && now > expiresAt) {
+          return false;
+        }
+
+        // For now, apply to all products. You can add more specific logic here
+        return (
+          discount.targetAudience === 'all' ||
+          discount.targetAudience === 'customers'
+        );
+      });
+
+      if (applicableDiscount && applicableDiscount.discountPercentage > 0) {
+        const discountedPrice =
+          product.price * (1 - applicableDiscount.discountPercentage / 100);
+        return {
+          ...product,
+          originalPrice: product.price,
+          price: discountedPrice,
+          discountPercentage: applicableDiscount.discountPercentage,
+        };
+      }
+
+      return product;
+    });
+  }
+
+  async searchProducts(query: string): Promise<Product[]> {
+    return this.getAllProducts({ search: query });
   }
 
   async getProductsByCategory(category: string): Promise<Product[]> {
     return this.getAllProducts({ category });
   }
 
-  async searchProducts(query: string): Promise<Product[]> {
-    return this.getAllProducts({ search: query });
+  async getProduct(id: string): Promise<Product | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/${id}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const product = await response.json();
+
+      // Apply discounts to single product
+      const discounts = await this.getActiveDiscounts();
+      const [productWithDiscount] = this.applyDiscounts([product], discounts);
+
+      return productWithDiscount;
+    } catch (error) {
+      console.error('Error fetching product:', error);
+      return null;
+    }
   }
 }
 
 export const productService = new ProductService();
-export type { ProductFilters };

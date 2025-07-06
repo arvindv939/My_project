@@ -45,4 +45,7 @@ router.get(
   announcementController.getAnnouncementStats
 );
 
+// Get active discounts
+router.get("/discounts/active", announcementController.getActiveDiscounts);
+
 module.exports = router;

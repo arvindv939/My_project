@@ -7,17 +7,43 @@
     "icon": "./assets/images/icon.png",
     "scheme": "greenmart",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "jsEngine": "hermes",
+    "platforms": ["android", "ios", "web"],
+    "androidStatusBar": {
+      "backgroundColor": "#10B981",
+      "barStyle": "light-content",
+      "translucent": false
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.greenmart.customer"
+      "bundleIdentifier": "com.greenmart.customer",
+      "jsEngine": "jsc",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow GreenMart to access your camera to scan QR codes."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#10B981"
       },
-      "package": "com.greenmart.customer"
+      "package": "com.greenmart.customer",
+      "versionCode": 1,
+      "permissions": ["android.permission.CAMERA"],
+      "softwareKeyboardLayoutMode": "pan",
+      "jsEngine": "hermes",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "greenmart",
+              "host": "*"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -26,22 +52,50 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font",
+      ["expo-font"],
       [
         "expo-camera",
         {
           "cameraPermission": "Allow GreenMart to access your camera to scan QR codes."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#10B981"
+        }
+      ],
+      [
+        "expo-updates",
+        {
+          "username": "your-expo-username"
+        }
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "tsconfigPaths": true,
+      "turboModules": true
     },
     "extra": {
-      "apiBaseUrl": "http://192.168.1.12:5000/api", // ✅ UPDATE THIS TO MATCH YOUR PC IP
+      "apiBaseUrl": "http://192.168.1.12:5000/api",
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id-here"
       }
-    }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/your-project-id-here",
+      "fallbackToCacheTimeout": 3000,
+      "checkAutomatically": "ON_LOAD"
+    },
+    "assetBundlePatterns": ["**/*"]
   }
 }
