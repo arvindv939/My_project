@@ -3,8 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 // ✅ Replace with your current machine IP
-export const API_BASE_URL = 'http://192.168.1.12:5000/api';
-
+export const API_BASE_URL =
+  Constants.expoConfig?.extra?.API_BASE_URL || 'http://localhost:5000/api';
 // ✅ Create axios instance
 const API: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

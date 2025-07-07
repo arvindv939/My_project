@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -24,20 +24,13 @@ import {
   Eye,
   EyeOff,
   Leaf,
-  Heart,
-  Star,
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import Animated, {
   FadeInDown,
   FadeInUp,
-  BounceIn,
   SlideInRight,
   useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withRepeat,
-  withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -62,21 +55,21 @@ export default function RegisterScreen() {
   const logoScale = useSharedValue(1);
   const buttonScale = useSharedValue(1);
 
-  React.useEffect(() => {
-    logoScale.value = withRepeat(
-      withTiming(1.05, { duration: 3000 }),
-      -1,
-      true
-    );
-  }, []);
+  // React.useEffect(() => {
+  //   logoScale.value = withRepeat(
+  //     withTiming(1.05, { duration: 3000 }),
+  //     -1,
+  //     true
+  //   );
+  // }, []);
 
-  const logoAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: logoScale.value }],
-  }));
+  // const logoAnimatedStyle = useAnimatedStyle(() => ({
+  //   transform: [{ scale: logoScale.value }],
+  // }));
 
-  const buttonAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: buttonScale.value }],
-  }));
+  // const buttonAnimatedStyle = useAnimatedStyle(() => ({
+  //   transform: [{ scale: buttonScale.value }],
+  // }));
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -120,9 +113,9 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!validateForm()) return;
 
-    buttonScale.value = withSpring(0.95, {}, () => {
-      buttonScale.value = withSpring(1);
-    });
+    // buttonScale.value = withSpring(0.95, {}, () => {
+    //   buttonScale.value = withSpring(1);
+    // });
 
     try {
       const success = await register(formData);
@@ -147,7 +140,7 @@ export default function RegisterScreen() {
 
   return (
     <LinearGradient
-      colors={['#8B5CF6', '#7C3AED', '#6D28D9']}
+      colors={['#10B981', '#059669', '#047857']}
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea}>
@@ -160,7 +153,7 @@ export default function RegisterScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Animated Background Elements */}
-            <View style={styles.backgroundElements}>
+            {/* <View style={styles.backgroundElements}>
               <Animated.View
                 entering={BounceIn.delay(200)}
                 style={[styles.floatingElement, styles.element1]}
@@ -179,13 +172,13 @@ export default function RegisterScreen() {
               >
                 <Leaf size={36} color="rgba(255,255,255,0.1)" />
               </Animated.View>
-            </View>
+            </View> */}
 
             {/* Header */}
-            <Animated.View entering={FadeInUp.delay(300)} style={styles.header}>
-              <Animated.View style={[styles.logoContainer, logoAnimatedStyle]}>
+            <Animated.View entering={FadeInUp} style={styles.header}>
+              <Animated.View style={[styles.logoContainer]}>
                 <View style={styles.logoBackground}>
-                  <Leaf size={40} color="#8B5CF6" />
+                  <Leaf size={40} color="#10B981" />
                 </View>
                 <Text style={styles.logoText}>Green Mart</Text>
               </Animated.View>
@@ -196,14 +189,11 @@ export default function RegisterScreen() {
             </Animated.View>
 
             {/* Form */}
-            <Animated.View
-              entering={FadeInDown.delay(500)}
-              style={styles.formContainer}
-            >
+            <Animated.View entering={FadeInDown} style={styles.formContainer}>
               <View style={styles.form}>
                 {/* Name Input */}
                 <Animated.View
-                  entering={SlideInRight.delay(600)}
+                  entering={SlideInRight}
                   style={styles.inputContainer}
                 >
                   <View
@@ -213,7 +203,7 @@ export default function RegisterScreen() {
                     ]}
                   >
                     <View style={styles.inputIconContainer}>
-                      <User size={20} color="#8B5CF6" />
+                      <User size={20} color="#10B981" />
                     </View>
                     <TextInput
                       style={styles.input}
@@ -236,7 +226,7 @@ export default function RegisterScreen() {
 
                 {/* Email Input */}
                 <Animated.View
-                  entering={SlideInRight.delay(700)}
+                  entering={SlideInRight}
                   style={styles.inputContainer}
                 >
                   <View
@@ -246,7 +236,7 @@ export default function RegisterScreen() {
                     ]}
                   >
                     <View style={styles.inputIconContainer}>
-                      <Mail size={20} color="#8B5CF6" />
+                      <Mail size={20} color="#10B981" />
                     </View>
                     <TextInput
                       style={styles.input}
@@ -270,7 +260,7 @@ export default function RegisterScreen() {
 
                 {/* Phone Input */}
                 <Animated.View
-                  entering={SlideInRight.delay(800)}
+                  entering={SlideInRight}
                   style={styles.inputContainer}
                 >
                   <View
@@ -280,7 +270,7 @@ export default function RegisterScreen() {
                     ]}
                   >
                     <View style={styles.inputIconContainer}>
-                      <Phone size={20} color="#8B5CF6" />
+                      <Phone size={20} color="#10B981" />
                     </View>
                     <TextInput
                       style={styles.input}
@@ -303,7 +293,7 @@ export default function RegisterScreen() {
 
                 {/* Address Input */}
                 <Animated.View
-                  entering={SlideInRight.delay(900)}
+                  entering={SlideInRight}
                   style={styles.inputContainer}
                 >
                   <View
@@ -313,7 +303,7 @@ export default function RegisterScreen() {
                     ]}
                   >
                     <View style={styles.inputIconContainer}>
-                      <MapPin size={20} color="#8B5CF6" />
+                      <MapPin size={20} color="#10B981" />
                     </View>
                     <TextInput
                       style={styles.input}
@@ -336,7 +326,7 @@ export default function RegisterScreen() {
 
                 {/* Password Input */}
                 <Animated.View
-                  entering={SlideInRight.delay(1000)}
+                  entering={SlideInRight}
                   style={styles.inputContainer}
                 >
                   <View
@@ -346,7 +336,7 @@ export default function RegisterScreen() {
                     ]}
                   >
                     <View style={styles.inputIconContainer}>
-                      <Lock size={20} color="#8B5CF6" />
+                      <Lock size={20} color="#10B981" />
                     </View>
                     <TextInput
                       style={styles.input}
@@ -381,7 +371,7 @@ export default function RegisterScreen() {
 
                 {/* Confirm Password Input */}
                 <Animated.View
-                  entering={SlideInRight.delay(1100)}
+                  entering={SlideInRight}
                   style={styles.inputContainer}
                 >
                   <View
@@ -391,7 +381,7 @@ export default function RegisterScreen() {
                     ]}
                   >
                     <View style={styles.inputIconContainer}>
-                      <Lock size={20} color="#8B5CF6" />
+                      <Lock size={20} color="#10B981" />
                     </View>
                     <TextInput
                       style={styles.input}
@@ -426,10 +416,7 @@ export default function RegisterScreen() {
                   )}
                 </Animated.View>
 
-                <Animated.View
-                  entering={FadeInUp.delay(1200)}
-                  style={buttonAnimatedStyle}
-                >
+                <Animated.View entering={FadeInUp}>
                   <TouchableOpacity
                     style={[
                       styles.registerButton,
@@ -467,10 +454,7 @@ export default function RegisterScreen() {
             </Animated.View>
 
             {/* Footer */}
-            <Animated.View
-              entering={FadeInUp.delay(1300)}
-              style={styles.footer}
-            >
+            <Animated.View entering={FadeInUp} style={styles.footer}>
               <Text style={styles.footerText}>
                 🌱 Join 10,000+ eco-conscious shoppers
               </Text>
@@ -670,7 +654,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   loginLinkText: {
-    color: '#8B5CF6',
+    color: '#10B981',
     fontSize: 14,
     fontFamily: 'Inter-Bold',
   },
