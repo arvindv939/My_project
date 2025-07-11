@@ -9,6 +9,7 @@ const {
   getBranchAnalytics,
   getRevenueAnalytics,
   getUserAnalytics,
+  getSalesAnalytics,
 } = require("../controllers/adminController");
 
 const User = require("../models/User");
@@ -98,6 +99,12 @@ router.get(
   roleMiddleware(["admin"]),
   getUserAnalytics
 );
+router.get(
+  "/analytics/sales",
+  authMiddleware,
+  roleMiddleware(["admin"]),
+  getSalesAnalytics
+);
 
 // Update user role
 router.put(
@@ -153,50 +160,6 @@ router.get(
       res.json(orders);
     } catch (error) {
       console.error("Get recent orders error:", error);
-      res.status(500).json({ message: "Server error" });
-    }
-  }
-);
-
-// Sales chart data
-router.get(
-  "/analytics/sales",
-  authMiddleware,
-  roleMiddleware(["admin"]),
-  async (req, res) => {
-    try {
-      const { period = "month" } = req.query;
-      let groupBy;
-
-      switch (period) {
-        case "day":
-          groupBy = {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
-          };
-          break;
-        case "week":
-          groupBy = { $dateToString: { format: "%Y-%U", date: "$createdAt" } };
-          break;
-        case "month":
-        default:
-          groupBy = { $dateToString: { format: "%Y-%m", date: "$createdAt" } };
-      }
-
-      const salesData = await Order.aggregate([
-        { $match: { status: "delivered" } },
-        {
-          $group: {
-            _id: groupBy,
-            totalSales: { $sum: "$totalAmount" },
-            orderCount: { $sum: 1 },
-          },
-        },
-        { $sort: { _id: 1 } },
-      ]);
-
-      res.json(salesData);
-    } catch (error) {
-      console.error("Get sales analytics error:", error);
       res.status(500).json({ message: "Server error" });
     }
   }

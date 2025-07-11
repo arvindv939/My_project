@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,6 +15,7 @@ const CLOUDINARY_UPLOAD_PRESET = "Green_Mart_product_images";
 const CLOUDINARY_CLOUD_NAME = "dum3uhmau";
 
 const TABS = [
+  { label: "Create Item", icon: "➕" },
   { label: "Inventory Management", icon: "📦" },
   { label: "Product Analytics", icon: "📊" },
   { label: "Order Management", icon: "🚚" },
@@ -25,24 +26,27 @@ const CATEGORY_OPTIONS = [
   "Fruits",
   "Dairy",
   "Bakery",
-  "Snacks",
-  "Beverages",
   "Staples",
-  "Household",
-  "Personal Care",
   "Others",
 ];
 
-const UNIT_OPTIONS = [
-  "Kg",
-  "Grams",
-  "Litres",
-  "Millilitres",
-  "Units",
-  "Packets",
-  "Pieces",
-  "Dozen",
-];
+const categoryUnitMap = {
+  Vegetables: ["Kg", "Grams", "Pieces", "Dozen", "Packets"],
+  Fruits: ["Kg", "Grams", "Pieces", "Dozen", "Packets"],
+  Dairy: ["Litres", "Millilitres", "Kg", "Grams", "Packets", "Units"],
+  Bakery: ["Pieces", "Packets", "Grams", "Kg"],
+  Staples: ["Kg", "Grams", "Litres", "Millilitres", "Packets"],
+  Others: [
+    "Units",
+    "Kg",
+    "Grams",
+    "Litres",
+    "Millilitres",
+    "Packets",
+    "Pieces",
+    "Dozen",
+  ],
+};
 
 const SummaryCard = ({ color, icon, title, value, subtitle, trend }) => (
   <motion.div
@@ -84,6 +88,7 @@ const ShopOwnerDashboard = () => {
     name: "",
     category: "",
     unit: "",
+    additionalUnits: [],
     price: "",
     discount: "",
     stock: "",
@@ -94,10 +99,23 @@ const ShopOwnerDashboard = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [selectedProductForQR, setSelectedProductForQR] = useState(null);
-  const csvInput = useRef(null);
+  const [availableUnits, setAvailableUnits] = useState([]);
 
   // Store last known order count for detecting new orders
   const [lastOrderCount, setLastOrderCount] = useState(0);
+
+  // Effect to update available units when category changes
+  useEffect(() => {
+    if (form.category && categoryUnitMap[form.category]) {
+      setAvailableUnits(categoryUnitMap[form.category]);
+    } else {
+      setAvailableUnits([]);
+    }
+    // Reset unit if it's not valid for the new category
+    if (form.unit && !categoryUnitMap[form.category]?.includes(form.unit)) {
+      setForm((prevForm) => ({ ...prevForm, unit: "" }));
+    }
+  }, [form.category]);
 
   // Polling for new orders every 30 seconds
   useEffect(() => {
@@ -105,7 +123,7 @@ const ShopOwnerDashboard = () => {
 
     const interval = setInterval(() => {
       fetchOrders(); // Fetch orders periodically
-    }, 30000); // 30 seconds
+    }, 5000); // 30 seconds
 
     return () => clearInterval(interval); // Cleanup
   }, []);
@@ -135,7 +153,7 @@ const ShopOwnerDashboard = () => {
 
       console.log("Fetching products with token:", token);
 
-      const res = await axios.get(API_URL, {
+      const res = await axios.get(`${API_URL}/my-products`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -203,18 +221,22 @@ const ShopOwnerDashboard = () => {
       // Validate required fields
       if (!form.name.trim()) {
         showToastMsg("Product name is required", "error");
+        setLoading(false);
         return;
       }
       if (!form.category) {
         showToastMsg("Please select a category", "error");
+        setLoading(false);
         return;
       }
       if (!form.unit) {
         showToastMsg("Please select a unit", "error");
+        setLoading(false);
         return;
       }
       if (!form.price || Number(form.price) <= 0) {
         showToastMsg("Please enter a valid price", "error");
+        setLoading(false);
         return;
       }
       if (
@@ -223,6 +245,20 @@ const ShopOwnerDashboard = () => {
         Number(form.stock) < 0
       ) {
         showToastMsg("Please enter a valid stock quantity", "error");
+        setLoading(false);
+        return;
+      }
+
+      // Validate additional units have prices
+      const invalidAdditionalUnits = form.additionalUnits.filter(
+        (unit) => !unit.price || Number(unit.price) <= 0
+      );
+      if (invalidAdditionalUnits.length > 0) {
+        showToastMsg(
+          "Please enter valid prices for all additional units",
+          "error"
+        );
+        setLoading(false);
         return;
       }
 
@@ -232,7 +268,6 @@ const ShopOwnerDashboard = () => {
       if (form.image && form.image instanceof File) {
         try {
           console.log("Uploading image to Cloudinary...");
-
           const formData = new FormData();
           formData.append("file", form.image);
           formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
@@ -269,11 +304,15 @@ const ShopOwnerDashboard = () => {
         imageUrl = form.image;
       }
 
-      // Prepare product data
+      // Prepare product data with proper number conversion
       const productData = {
         name: form.name.trim(),
         category: form.category,
         unit: form.unit,
+        additionalUnits: form.additionalUnits.map((unit) => ({
+          unit: unit.unit,
+          price: Number(unit.price),
+        })),
         price: Number(form.price),
         discount: form.discount ? Number(form.discount) : 0,
         stock: Number(form.stock),
@@ -288,6 +327,7 @@ const ShopOwnerDashboard = () => {
       const token = localStorage.getItem("token");
       if (!token) {
         showToastMsg("Authentication required. Please login again.", "error");
+        setLoading(false);
         return;
       }
 
@@ -322,7 +362,6 @@ const ShopOwnerDashboard = () => {
       await fetchProducts();
     } catch (err) {
       console.error("Error saving product:", err);
-
       let errorMessage = "An error occurred while saving the product";
 
       if (err.response) {
@@ -354,6 +393,7 @@ const ShopOwnerDashboard = () => {
       discount: "",
       stock: "",
       image: null,
+      additionalUnits: [],
     });
     setEditingId(null);
   }
@@ -368,6 +408,7 @@ const ShopOwnerDashboard = () => {
       discount: product.discount || "",
       stock: product.stock || "",
       image: product.imageUrl || null,
+      additionalUnits: product.additionalUnits || [],
     });
     setShowProductModal(true);
   }
@@ -629,48 +670,6 @@ const ShopOwnerDashboard = () => {
         />
       </div>
 
-      {/* Quick Actions */}
-      <motion.div
-        className="bg-white rounded-2xl shadow-lg p-6 flex flex-col md:flex-row md:items-center md:space-x-6 space-y-4 md:space-y-0 mb-8"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <span className="font-bold text-lg text-gray-800 mb-2 md:mb-0">
-          Quick Actions
-        </span>
-        <div className="flex flex-wrap gap-3">
-          <input
-            type="file"
-            accept=".csv"
-            className="hidden"
-            ref={csvInput}
-            onChange={() =>
-              showToastMsg("Bulk upload feature coming soon!", "info")
-            }
-          />
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => csvInput.current.click()}
-            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg"
-            disabled={loading}
-          >
-            📊 Bulk Upload
-          </motion.button>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg"
-            onClick={() =>
-              showToastMsg("Bulk price update coming soon!", "info")
-            }
-            disabled={loading}
-          >
-            💰 Price Update
-          </motion.button>
-        </div>
-      </motion.div>
-
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 mb-6">
         {TABS.map((t) => (
@@ -728,26 +727,37 @@ const ShopOwnerDashboard = () => {
 
               {/* Inventory Table */}
               <div className="overflow-x-auto rounded-xl border border-gray-200">
-                <table className="w-full table-auto">
+                <table className="w-full table-auto min-w-[1200px]">
                   <thead>
                     <tr className="bg-gradient-to-r from-gray-50 to-gray-100 text-left">
-                      <th className="p-4 font-semibold text-gray-700">Image</th>
-                      <th className="p-4 font-semibold text-gray-700">
+                      <th className="p-4 font-semibold text-gray-700 w-16">
+                        Image
+                      </th>
+                      <th className="p-4 font-semibold text-gray-700 w-40">
                         Product Name
                       </th>
-                      <th className="p-4 font-semibold text-gray-700">
+                      <th className="p-4 font-semibold text-gray-700 w-32">
                         Category
                       </th>
-                      <th className="p-4 font-semibold text-gray-700">Unit</th>
-                      <th className="p-4 font-semibold text-gray-700">Price</th>
-                      <th className="p-4 font-semibold text-gray-700">
+                      <th className="p-4 font-semibold text-gray-700 w-32">
+                        Unit
+                      </th>
+                      <th className="p-4 font-semibold text-gray-700 w-48">
+                        Additional Units
+                      </th>
+                      <th className="p-4 font-semibold text-gray-700 w-24">
+                        Price
+                      </th>
+                      <th className="p-4 font-semibold text-gray-700 w-24">
                         Discount
                       </th>
-                      <th className="p-4 font-semibold text-gray-700">Stock</th>
-                      <th className="p-4 font-semibold text-gray-700">
+                      <th className="p-4 font-semibold text-gray-700 w-32">
+                        Stock
+                      </th>
+                      <th className="p-4 font-semibold text-gray-700 w-24">
                         Status
                       </th>
-                      <th className="p-4 font-semibold text-gray-700">
+                      <th className="p-4 font-semibold text-gray-700 w-32">
                         Actions
                       </th>
                     </tr>
@@ -775,12 +785,37 @@ const ShopOwnerDashboard = () => {
                           <td className="p-4 text-gray-600">
                             {product.category}
                           </td>
-                          <td className="p-4 text-gray-600">{product.unit}</td>
+                          <td className="p-4 text-gray-600">
+                            <div className="text-sm font-medium text-blue-600">
+                              Primary: {product.unit}
+                            </div>
+                          </td>
+                          <td className="p-4 text-gray-600 min-w-[180px]">
+                            <div className="text-sm">
+                              {product.additionalUnits &&
+                              product.additionalUnits.length > 0 ? (
+                                <div className="space-y-1">
+                                  {product.additionalUnits.map((unit, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="inline-block bg-gradient-to-r from-green-100 to-green-200 text-green-800 text-xs font-medium px-3 py-1 rounded-full mr-2 mb-1 shadow-sm"
+                                    >
+                                      ₹{unit.price}/{unit.unit}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-xs">
+                                  --
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="p-4 font-semibold text-green-600">
-                            ₹{product.price}
+                            ₹{product.price}/{product.unit}
                           </td>
                           <td className="p-4">
-                            {product.discount ? (
+                            {product.discount && product.discount > 0 ? (
                               <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">
                                 {product.discount}% OFF
                               </span>
@@ -788,7 +823,16 @@ const ShopOwnerDashboard = () => {
                               <span className="text-gray-400">--</span>
                             )}
                           </td>
-                          <td className="p-4 font-medium">{product.stock}</td>
+                          <td className="p-4 font-medium">
+                            <div className="text-sm">
+                              <span className="font-semibold">
+                                {product.stock}
+                              </span>
+                              <span className="text-gray-500 ml-1">
+                                {product.unit}
+                              </span>
+                            </div>
+                          </td>
                           <td className="p-4">
                             {getStatusLabel(product.stock)}
                           </td>
@@ -831,7 +875,7 @@ const ShopOwnerDashboard = () => {
                     ) : (
                       <tr>
                         <td
-                          colSpan={9}
+                          colSpan={10}
                           className="text-center p-8 text-gray-500"
                         >
                           {loading
@@ -890,7 +934,7 @@ const ShopOwnerDashboard = () => {
                                 {product.name}
                               </span>
                               <p className="text-sm text-gray-500">
-                                {product.stock} in stock
+                                {product.stock} {product.unit} in stock
                               </p>
                             </div>
                           </div>
@@ -934,7 +978,7 @@ const ShopOwnerDashboard = () => {
                                 {product.name}
                               </span>
                               <p className="text-sm text-orange-600">
-                                {product.stock} remaining
+                                {product.stock} {product.unit} remaining
                               </p>
                             </div>
                           </div>
@@ -981,6 +1025,251 @@ const ShopOwnerDashboard = () => {
                   })}
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {tab === "Create Item" && (
+            <motion.div
+              key="createItem"
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              transition={{ duration: 0.25 }}
+            >
+              <h2 className="font-bold text-2xl text-gray-800 mb-4">
+                Create New Item
+              </h2>
+              <form
+                onSubmit={handleProductSubmit}
+                className="space-y-6 max-w-2xl"
+              >
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2">
+                    Product Name*
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full border border-gray-300 rounded-xl p-3"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    required
+                    disabled={loading}
+                    placeholder="e.g., Carrot, Milk"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      Category*
+                    </label>
+                    <select
+                      className="w-full border border-gray-300 rounded-xl p-3"
+                      value={form.category}
+                      onChange={(e) => {
+                        setForm({
+                          ...form,
+                          category: e.target.value,
+                          unit: "",
+                        });
+                      }}
+                      required
+                    >
+                      <option value="">Select Category</option>
+                      {CATEGORY_OPTIONS.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      Unit*
+                    </label>
+                    <select
+                      className="w-full border border-gray-300 rounded-xl p-3"
+                      value={form.unit}
+                      onChange={(e) =>
+                        setForm({ ...form, unit: e.target.value })
+                      }
+                      required
+                      disabled={!form.category}
+                    >
+                      <option value="">Select Unit</option>
+                      {availableUnits.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2">
+                    Additional Units with Prices (Optional)
+                  </label>
+                  <div className="space-y-2">
+                    {availableUnits
+                      .filter((u) => u !== form.unit)
+                      .map((unit) => {
+                        const existing = form.additionalUnits.find(
+                          (a) => a.unit === unit
+                        );
+                        return (
+                          <div
+                            key={unit}
+                            className="flex items-center space-x-4 border p-3 rounded-xl bg-gray-50"
+                          >
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={!!existing}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setForm({
+                                      ...form,
+                                      additionalUnits: [
+                                        ...form.additionalUnits,
+                                        { unit, price: "" },
+                                      ],
+                                    });
+                                  } else {
+                                    setForm({
+                                      ...form,
+                                      additionalUnits:
+                                        form.additionalUnits.filter(
+                                          (a) => a.unit !== unit
+                                        ),
+                                    });
+                                  }
+                                }}
+                                className="form-checkbox h-4 w-4 text-blue-600"
+                              />
+                              <span className="font-medium">{unit}</span>
+                            </label>
+                            {existing && (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm text-gray-600">₹</span>
+                                <input
+                                  type="number"
+                                  placeholder={`Price per ${unit}`}
+                                  className="border border-gray-300 rounded-lg px-3 py-2 w-32"
+                                  value={existing.price}
+                                  onChange={(e) => {
+                                    const updatedUnits =
+                                      form.additionalUnits.map((a) =>
+                                        a.unit === unit
+                                          ? { ...a, price: e.target.value }
+                                          : a
+                                      );
+                                    setForm({
+                                      ...form,
+                                      additionalUnits: updatedUnits,
+                                    });
+                                  }}
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Check units and assign prices separately.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      Price (₹ per {form.unit || "unit"})*
+                    </label>
+                    <input
+                      type="number"
+                      className="w-full border border-gray-300 rounded-xl p-3"
+                      value={form.price}
+                      onChange={(e) =>
+                        setForm({ ...form, price: e.target.value })
+                      }
+                      required
+                      min="1"
+                      step="0.01"
+                      disabled={loading}
+                      placeholder="Enter price"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      Discount (%)
+                    </label>
+                    <input
+                      type="number"
+                      className="w-full border border-gray-300 rounded-xl p-3"
+                      value={form.discount}
+                      onChange={(e) =>
+                        setForm({ ...form, discount: e.target.value })
+                      }
+                      min="0"
+                      max="100"
+                      step="1"
+                      disabled={loading}
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      Stock (in {form.unit || "units"})*
+                    </label>
+                    <input
+                      type="number"
+                      className="w-full border border-gray-300 rounded-xl p-3"
+                      value={form.stock}
+                      onChange={(e) =>
+                        setForm({ ...form, stock: e.target.value })
+                      }
+                      required
+                      min="0"
+                      disabled={loading}
+                      placeholder="Enter stock"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2">
+                    Product Image
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="w-full border border-gray-300 rounded-xl p-3"
+                    onChange={(e) =>
+                      setForm({ ...form, image: e.target.files[0] })
+                    }
+                    disabled={loading}
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <motion.button
+                    type="submit"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-xl font-semibold disabled:opacity-50"
+                    disabled={loading}
+                  >
+                    {editingId ? "Update Item" : "Create Item"}
+                  </motion.button>
+                </div>
+              </form>
             </motion.div>
           )}
 
@@ -1087,9 +1376,10 @@ const ShopOwnerDashboard = () => {
                         className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         required
                         value={form.category}
-                        onChange={(e) =>
-                          setForm({ ...form, category: e.target.value })
-                        }
+                        onChange={(e) => {
+                          const newCategory = e.target.value;
+                          setForm({ ...form, category: newCategory, unit: "" }); // Reset unit when category changes
+                        }}
                         disabled={loading}
                       >
                         <option value="">Select Category</option>
@@ -1112,10 +1402,10 @@ const ShopOwnerDashboard = () => {
                         onChange={(e) =>
                           setForm({ ...form, unit: e.target.value })
                         }
-                        disabled={loading}
+                        disabled={loading || !form.category}
                       >
                         <option value="">Select Unit</option>
-                        {UNIT_OPTIONS.map((unit) => (
+                        {availableUnits.map((unit) => (
                           <option key={unit} value={unit}>
                             {unit}
                           </option>
@@ -1162,6 +1452,7 @@ const ShopOwnerDashboard = () => {
                         type="number"
                         min="0"
                         max="100"
+                        step="1"
                         className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         value={form.discount}
                         onChange={(e) =>
@@ -1231,7 +1522,6 @@ const ShopOwnerDashboard = () => {
                     <p className="text-sm text-gray-500 mt-2">
                       Supported formats: JPG, PNG, GIF (Max size: 5MB)
                     </p>
-
                     {form.image && (
                       <div className="mt-4">
                         <p className="text-sm text-gray-500 mb-2">
@@ -1247,10 +1537,7 @@ const ShopOwnerDashboard = () => {
                           <div className="flex items-center space-x-4">
                             <img
                               src={
-                                // eslint-disable-next-line no-constant-binary-expression
                                 URL.createObjectURL(form.image) ||
-                                "/placeholder.svg" ||
-                                "/placeholder.svg" ||
                                 "/placeholder.svg"
                               }
                               alt="Preview"

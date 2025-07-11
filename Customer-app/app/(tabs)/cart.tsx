@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,31 +12,48 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, CreditCard, Truck } from 'lucide-react-native';
+import { MapPin, CreditCard, Truck, Wifi, WifiOff } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCart } from '@/contexts/CartContext';
 import { CartItem } from '@/components/CartItem';
 import { formatIndianCurrency } from '@/utils/currency';
 import { orderService } from '@/services/orderService';
-// 👇 Import your auth context here
 import { useAuth } from '@/contexts/AuthContext';
+import { testConnection } from '@/utils/api';
 
 export default function CartScreen() {
   const { items, getTotalPrice, clearCart } = useCart();
-  // 👇 Get token from AuthContext
   const { token } = useAuth();
 
   const [loading, setLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<boolean | null>(
+    null
+  );
   const [deliveryAddress, setDeliveryAddress] = useState({
     street: '123 Main Street',
-    city: 'City',
-    state: 'State',
-    zipCode: '12345',
+    city: 'Mumbai',
+    state: 'Maharashtra',
+    zipCode: '400001',
   });
+  const [orderType, setOrderType] = useState<'online' | 'offline'>('online');
 
   const totalPrice = getTotalPrice();
-  const deliveryFee = totalPrice > 500 ? 0 : 40;
+  const deliveryFee = orderType === 'online' ? (totalPrice > 500 ? 0 : 40) : 0;
   const finalTotal = totalPrice + deliveryFee;
+
+  // Test connection on component mount
+  useEffect(() => {
+    checkConnection();
+  }, []);
+
+  const checkConnection = async () => {
+    try {
+      const isConnected = await testConnection();
+      setConnectionStatus(isConnected);
+    } catch (error) {
+      setConnectionStatus(false);
+    }
+  };
 
   const handleCheckout = async () => {
     try {
@@ -63,26 +80,67 @@ export default function CartScreen() {
         return;
       }
 
+      // Check connection before placing order
       setLoading(true);
+      const isConnected = await testConnection();
+
+      if (!isConnected) {
+        Alert.alert(
+          'Connection Error',
+          'Unable to connect to server. Please check your internet connection and try again.'
+        );
+        setLoading(false);
+        return;
+      }
 
       const orderPayload = {
         items: items.map((item) => ({
-          productId: item.id || item._id, // support both id and _id
+          productId: item.id || item._id,
           quantity: item.quantity,
           price: item.price,
         })),
         totalAmount: finalTotal,
         deliveryAddress,
-        paymentMethod: 'cash', // ✅ required by backend
+        paymentMethod: 'cash',
+        notes: 'Order placed from mobile app',
       };
+
+      console.log('📦 Placing order with payload:', orderPayload);
 
       const order = await orderService.createOrder(orderPayload, token);
 
-      Alert.alert('Success', 'Order placed successfully!');
-      clearCart(); // optional
+      Alert.alert(
+        'Success! 🎉',
+        `Order #${order._id.slice(
+          -6
+        )} placed successfully!\n\nYou will receive updates about your order status.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              clearCart();
+              // Navigate to orders tab or order details
+            },
+          },
+        ]
+      );
     } catch (error: any) {
-      console.error('Error placing order:', error);
-      Alert.alert('Error', error.message || 'Failed to place order');
+      console.error('❌ Error placing order:', error);
+
+      Alert.alert(
+        'Order Failed',
+        error.message || 'Failed to place order. Please try again.',
+        [
+          {
+            text: 'Retry',
+            onPress: () => handleCheckout(),
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -111,12 +169,25 @@ export default function CartScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* Header with connection status */}
       <LinearGradient colors={['#27AE60', '#2ECC71']} style={styles.header}>
-        <Text style={styles.headerTitle}>Shopping Cart</Text>
-        <Text style={styles.headerSubtitle}>
-          {items.length} items in your basket
-        </Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Shopping Cart</Text>
+            <Text style={styles.headerSubtitle}>
+              {items.length} items in your basket
+            </Text>
+          </View>
+          <View style={styles.connectionIndicator}>
+            {connectionStatus === null ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : connectionStatus ? (
+              <Wifi size={20} color="#ffffff" />
+            ) : (
+              <WifiOff size={20} color="#ff6b6b" />
+            )}
+          </View>
+        </View>
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -126,46 +197,91 @@ export default function CartScreen() {
             <CartItem key={item.id} item={item} />
           ))}
         </View>
+        <View style={styles.orderTypeContainer}>
+          <TouchableOpacity
+            style={[
+              styles.orderTypeButton,
+              orderType === 'online' && styles.orderTypeButtonActive,
+            ]}
+            onPress={() => setOrderType('online')}
+          >
+            <Text
+              style={[
+                styles.orderTypeText,
+                orderType === 'online' && styles.orderTypeTextActive,
+              ]}
+            >
+              Online Delivery
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.orderTypeButton,
+              orderType === 'offline' && styles.orderTypeButtonActive,
+            ]}
+            onPress={() => setOrderType('offline')}
+          >
+            <Text
+              style={[
+                styles.orderTypeText,
+                orderType === 'offline' && styles.orderTypeTextActive,
+              ]}
+            >
+              Offline Pickup
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Delivery Address */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MapPin size={20} color="#27AE60" />
-            <Text style={styles.sectionTitle}>Delivery Address</Text>
+
+        {/* Delivery Address Section */}
+        {orderType === 'online' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <MapPin size={20} color="#27AE60" />
+              <Text style={styles.sectionTitle}>Delivery Address</Text>
+            </View>
+            <TextInput
+              style={styles.addressInput}
+              value={deliveryAddress.street}
+              onChangeText={(text) =>
+                setDeliveryAddress({ ...deliveryAddress, street: text })
+              }
+              placeholder="Street address"
+              placeholderTextColor="#9CA3AF"
+            />
+            <View style={styles.addressRow}>
+              <TextInput
+                style={[styles.addressInput, styles.addressInputHalf]}
+                value={deliveryAddress.city}
+                onChangeText={(text) =>
+                  setDeliveryAddress({ ...deliveryAddress, city: text })
+                }
+                placeholder="City"
+                placeholderTextColor="#9CA3AF"
+              />
+              <TextInput
+                style={[styles.addressInput, styles.addressInputHalf]}
+                value={deliveryAddress.state}
+                onChangeText={(text) =>
+                  setDeliveryAddress({ ...deliveryAddress, state: text })
+                }
+                placeholder="State"
+                placeholderTextColor="#9CA3AF"
+              />
+            </View>
+            <TextInput
+              style={styles.addressInput}
+              value={deliveryAddress.zipCode}
+              onChangeText={(text) =>
+                setDeliveryAddress({ ...deliveryAddress, zipCode: text })
+              }
+              placeholder="Zip Code"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+            />
           </View>
-          <TextInput
-            style={styles.addressInput}
-            value={deliveryAddress.street}
-            onChangeText={(text) =>
-              setDeliveryAddress({ ...deliveryAddress, street: text })
-            }
-            placeholder="Street address"
-          />
-          <TextInput
-            style={styles.addressInput}
-            value={deliveryAddress.city}
-            onChangeText={(text) =>
-              setDeliveryAddress({ ...deliveryAddress, city: text })
-            }
-            placeholder="City"
-          />
-          <TextInput
-            style={styles.addressInput}
-            value={deliveryAddress.state}
-            onChangeText={(text) =>
-              setDeliveryAddress({ ...deliveryAddress, state: text })
-            }
-            placeholder="State"
-          />
-          <TextInput
-            style={styles.addressInput}
-            value={deliveryAddress.zipCode}
-            onChangeText={(text) =>
-              setDeliveryAddress({ ...deliveryAddress, zipCode: text })
-            }
-            placeholder="Zip Code"
-          />
-        </View>
+        )}
 
         {/* Payment Method */}
         <View style={styles.section}>
@@ -182,23 +298,38 @@ export default function CartScreen() {
         </View>
 
         {/* Delivery Info */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Truck size={20} color="#27AE60" />
-            <Text style={styles.sectionTitle}>Delivery Information</Text>
+        {orderType === 'online' && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Truck size={20} color="#27AE60" />
+              <Text style={styles.sectionTitle}>Delivery Information</Text>
+            </View>
+            <View style={styles.deliveryInfo}>
+              <Text style={styles.deliveryText}>🚚 Standard Delivery</Text>
+              <Text style={styles.deliverySubtext}>
+                Delivered within 2-3 hours
+              </Text>
+              <Text style={styles.deliveryNote}>
+                {deliveryFee === 0
+                  ? 'Free delivery on orders above ₹500'
+                  : `Delivery fee: ${formatIndianCurrency(deliveryFee)}`}
+              </Text>
+            </View>
           </View>
-          <View style={styles.deliveryInfo}>
-            <Text style={styles.deliveryText}>🚚 Standard Delivery</Text>
-            <Text style={styles.deliverySubtext}>
-              Delivered within 2-3 hours
-            </Text>
-            <Text style={styles.deliveryNote}>
-              {deliveryFee === 0
-                ? 'Free delivery on orders above ₹500'
-                : `Delivery fee: ${formatIndianCurrency(deliveryFee)}`}
+        )}
+        {orderType === 'offline' && (
+          <View style={styles.section}>
+            <Text
+              style={{
+                textAlign: 'center',
+                color: '#15803D',
+                fontFamily: 'Inter-Medium',
+              }}
+            >
+              Please visit the store counter to pickup your order!
             </Text>
           </View>
-        </View>
+        )}
 
         {/* Order Summary */}
         <View style={styles.summaryContainer}>
@@ -213,17 +344,19 @@ export default function CartScreen() {
             </Text>
           </View>
 
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery Fee</Text>
-            <Text
-              style={[
-                styles.summaryValue,
-                deliveryFee === 0 && styles.freeDelivery,
-              ]}
-            >
-              {deliveryFee === 0 ? 'FREE' : formatIndianCurrency(deliveryFee)}
-            </Text>
-          </View>
+          {orderType === 'online' && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Delivery Fee</Text>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  deliveryFee === 0 && styles.freeDelivery,
+                ]}
+              >
+                {deliveryFee === 0 ? 'FREE' : formatIndianCurrency(deliveryFee)}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.divider} />
 
@@ -247,20 +380,27 @@ export default function CartScreen() {
         <TouchableOpacity
           style={[
             styles.checkoutButton,
-            loading && styles.checkoutButtonDisabled,
+            (loading || connectionStatus === false) &&
+              styles.checkoutButtonDisabled,
           ]}
           onPress={handleCheckout}
-          disabled={loading}
+          disabled={loading || connectionStatus === false}
         >
           <LinearGradient
-            colors={['#27AE60', '#2ECC71']}
+            colors={
+              connectionStatus === false
+                ? ['#9CA3AF', '#6B7280']
+                : ['#27AE60', '#2ECC71']
+            }
             style={styles.checkoutGradient}
           >
             {loading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
               <>
-                <Text style={styles.checkoutText}>Place Order</Text>
+                <Text style={styles.checkoutText}>
+                  {connectionStatus === false ? 'No Connection' : 'Place Order'}
+                </Text>
                 <Text style={styles.checkoutAmount}>
                   {formatIndianCurrency(finalTotal)}
                 </Text>
@@ -268,6 +408,15 @@ export default function CartScreen() {
             )}
           </LinearGradient>
         </TouchableOpacity>
+
+        {connectionStatus === false && (
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={checkConnection}
+          >
+            <Text style={styles.retryText}>Tap to retry connection</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -282,6 +431,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
   headerTitle: {
     fontSize: 28,
     fontFamily: 'Inter-Bold',
@@ -292,6 +446,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.8)',
     fontFamily: 'Inter-Regular',
+  },
+  connectionIndicator: {
+    marginTop: 4,
   },
   content: {
     flex: 1,
@@ -334,12 +491,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#1F2937',
-    textAlignVertical: 'top',
+    marginBottom: 8,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addressInputHalf: {
+    flex: 1,
   },
   paymentOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 8,
   },
   paymentText: {
@@ -351,6 +512,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     fontFamily: 'Inter-Regular',
+    marginTop: 2,
   },
   deliveryInfo: {
     gap: 4,
@@ -471,6 +633,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     color: '#ffffff',
   },
+  retryButton: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  retryText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontFamily: 'Inter-Regular',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -494,5 +665,32 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  orderTypeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  orderTypeButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#27AE60',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  orderTypeButtonActive: {
+    backgroundColor: '#27AE60',
+  },
+  orderTypeText: {
+    color: '#27AE60',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+  },
+  orderTypeTextActive: {
+    color: '#fff',
   },
 });

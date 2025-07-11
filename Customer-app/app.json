@@ -7,52 +7,31 @@
     "icon": "./assets/images/icon.png",
     "scheme": "greenmart",
     "userInterfaceStyle": "automatic",
-    "jsEngine": "hermes",
-    "platforms": ["android", "ios", "web"],
-    "androidStatusBar": {
-      "backgroundColor": "#10B981",
-      "barStyle": "light-content",
-      "translucent": false
-    },
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.greenmart.customer",
-      "jsEngine": "jsc",
-      "infoPlist": {
-        "NSCameraUsageDescription": "Allow GreenMart to access your camera to scan QR codes."
-      }
+      "bundleIdentifier": "com.greenmart.customer"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#10B981"
+        "backgroundColor": "#ffffff"
       },
       "package": "com.greenmart.customer",
-      "versionCode": 1,
-      "permissions": ["android.permission.CAMERA"],
-      "softwareKeyboardLayoutMode": "pan",
-      "jsEngine": "hermes",
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "data": [
-            {
-              "scheme": "greenmart",
-              "host": "*"
-            }
-          ],
-          "category": ["BROWSABLE", "DEFAULT"]
-        }
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE"
       ]
     },
     "web": {
       "bundler": "metro",
-      "output": "single",
+      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
-      ["expo-font"],
       [
         "expo-camera",
         {
@@ -60,42 +39,22 @@
         }
       ],
       [
-        "expo-splash-screen",
+        "expo-barcode-scanner",
         {
-          "image": "./assets/images/splash.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#10B981"
-        }
-      ],
-      [
-        "expo-updates",
-        {
-          "username": "your-expo-username"
+          "cameraPermission": "Allow GreenMart to access your camera to scan product barcodes."
         }
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "tsconfigPaths": true,
-      "turboModules": true
+      "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "http://192.168.1.12:5000/api",
       "router": {
         "origin": false
       },
       "eas": {
         "projectId": "your-project-id-here"
       }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/your-project-id-here",
-      "fallbackToCacheTimeout": 3000,
-      "checkAutomatically": "ON_LOAD"
-    },
-    "assetBundlePatterns": ["**/*"]
+    }
   }
 }

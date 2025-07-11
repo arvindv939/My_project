@@ -133,9 +133,10 @@ export function QRScanner({ isVisible, onScan, onClose }: QRScannerProps) {
         {/* Instructions */}
         <View style={styles.instructions}>
           <QrCode size={32} color="#27AE60" />
-          <Text style={styles.instructionTitle}>Scan Product QR Code</Text>
+          <Text style={styles.instructionTitle}>Scan QR Code</Text>
           <Text style={styles.instructionText}>
-            Point your camera at a product QR code to add it to your cart
+            Point your camera at a shop QR code to browse products or at a
+            product QR code to add it to your cart.
           </Text>
           {scanned && (
             <View style={styles.scannedIndicator}>

@@ -171,6 +171,63 @@ const getBranchAnalytics = async (req, res) => {
   }
 };
 
+const getSalesAnalytics = async (req, res) => {
+  try {
+    const { period = "month" } = req.query;
+
+    let groupBy;
+    let dateRange;
+
+    switch (period) {
+      case "24h":
+        groupBy = {
+          $dateToString: { format: "%Y-%m-%d %H:00", date: "$createdAt" },
+        };
+        dateRange = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        break;
+      case "7d":
+        groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+        dateRange = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "30d":
+        groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
+        dateRange = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case "90d":
+        groupBy = { $dateToString: { format: "%Y-%m", date: "$createdAt" } };
+        dateRange = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        groupBy = { $dateToString: { format: "%Y-%m", date: "$createdAt" } };
+        dateRange = new Date(Date.now() - 12 * 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const salesData = await Order.aggregate([
+      {
+        $match: {
+          status: { $ne: "cancelled" },
+          createdAt: { $gte: dateRange },
+        },
+      },
+      {
+        $group: {
+          _id: groupBy,
+          totalSales: { $sum: "$totalAmount" },
+          orderCount: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    res.json(salesData);
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to fetch sales analytics",
+      error: err.message,
+    });
+  }
+};
+
 const getRevenueAnalytics = async (req, res) => {
   try {
     const { period = "month" } = req.query;
@@ -179,17 +236,32 @@ const getRevenueAnalytics = async (req, res) => {
     let dateRange;
 
     switch (period) {
-      case "day":
-        groupBy = { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } };
-        dateRange = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      case "24h":
+        groupBy = {
+          $dateToString: { format: "%Y-%m-%d %H:00", date: "$createdAt" },
+        };
+        dateRange = new Date(Date.now() - 24 * 60 * 60 * 1000);
         break;
-      case "week":
-        groupBy = { $dateToString: { format: "%Y-%U", date: "$createdAt" } };
-        dateRange = new Date(Date.now() - 12 * 7 * 24 * 60 * 60 * 1000);
+      case "7d":
+      case "30d":
+        groupBy = {
+          $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+        };
+        dateRange = new Date(
+          Date.now() - (period === "7d" ? 7 : 30) * 24 * 60 * 60 * 1000
+        );
+        break;
+      case "90d":
+        groupBy = {
+          $dateToString: { format: "%Y-%m", date: "$createdAt" },
+        };
+        dateRange = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
         break;
       default:
-        groupBy = { $dateToString: { format: "%Y-%m", date: "$createdAt" } };
-        dateRange = new Date(Date.now() - 12 * 30 * 24 * 60 * 60 * 1000);
+        groupBy = {
+          $dateToString: { format: "%Y-%m", date: "$createdAt" },
+        };
+        dateRange = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
     }
 
     const revenueData = await Order.aggregate([
@@ -286,4 +358,5 @@ module.exports = {
   getBranchAnalytics,
   getRevenueAnalytics,
   getUserAnalytics,
+  getSalesAnalytics, // ✅ Add this
 };

@@ -10,6 +10,11 @@ dotenv.config();
 
 const app = express();
 
+// Import order automation service
+const orderAutomationService = require("./services/orderAutomation");
+
+app.use("/api/auto-reorders", require("./routes/autoReorder"));
+
 // ✅ Dynamic CORS config to support localhost and LAN IPs
 const corsOptions = {
   origin: (origin, callback) => {
@@ -46,6 +51,11 @@ const connectDB = async () => {
       }
     );
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+
+    // 🚀 Start order automation service after DB connection
+    setTimeout(() => {
+      orderAutomationService.start();
+    }, 2000); // Wait 2 seconds for everything to initialize
   } catch (error) {
     console.error("Database connection error:", error);
     process.exit(1);
@@ -71,7 +81,32 @@ app.get("/api/health", (req, res) => {
     status: "OK",
     message: "GreenMart API is running",
     timestamp: new Date().toISOString(),
+    orderAutomation: orderAutomationService.getStatus(),
   });
+});
+
+// Order automation control routes (for testing/debugging)
+app.get("/api/automation/status", (req, res) => {
+  res.json({
+    success: true,
+    automation: orderAutomationService.getStatus(),
+  });
+});
+
+app.post("/api/automation/trigger", async (req, res) => {
+  try {
+    await orderAutomationService.triggerManually();
+    res.json({
+      success: true,
+      message: "Order automation triggered manually",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to trigger automation",
+      error: error.message,
+    });
+  }
 });
 
 // Root route
@@ -79,6 +114,10 @@ app.get("/", (req, res) => {
   res.json({
     message: "Welcome to GreenMart API",
     version: "1.0.0",
+    features: {
+      orderAutomation: "✅ Enabled",
+      autoStatusProgression: "pending → confirmed → preparing → delivered",
+    },
     endpoints: {
       auth: "/api/auth",
       products: "/api/products",
@@ -89,6 +128,7 @@ app.get("/", (req, res) => {
       branches: "/api/branches",
       bulkOrders: "/api/bulk-orders",
       announcements: "/api/announcements",
+      automation: "/api/automation",
     },
   });
 });
@@ -139,9 +179,10 @@ app.listen(PORT, "0.0.0.0", () => {
   const localIP =
     wifi.find((i) => i.family === "IPv4")?.address || "192.168.1.12";
 
-  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
-  console.log(`📱 Accessible on your LAN at: http://${localIP}:${PORT}`);
-  console.log(`🏥 Health check: http://${localIP}:${PORT}/api/health`);
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
+  console.log(` Accessible on your LAN at: http://${localIP}:${PORT}`);
+  console.log(` Health check: http://${localIP}:${PORT}/api/health`);
+  console.log(` Order Automation: ENABLED`);
 });
 
 module.exports = app;

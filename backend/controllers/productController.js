@@ -82,6 +82,25 @@ exports.getProducts = async (req, res) => {
   }
 };
 
+exports.getProductsByShop = async (req, res) => {
+  try {
+    const { shopId } = req.params;
+    const products = await Product.find({
+      shop: shopId, // Mongoose will cast string to ObjectId!
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json(products);
+  } catch (error) {
+    res
+      .status(500)
+      .json({
+        message: "Error fetching products by shop",
+        error: error.message,
+      });
+  }
+};
+
 // Get products created by the authenticated shop owner
 exports.getMyProducts = async (req, res) => {
   try {
@@ -174,6 +193,7 @@ exports.createProduct = async (req, res) => {
       stock,
       imageUrl,
       description,
+      additionalUnits = [],
     } = req.body;
 
     // Validate required fields
@@ -209,6 +229,7 @@ exports.createProduct = async (req, res) => {
       stock: Number.parseInt(stock),
       imageUrl: imageUrl || "",
       description: description || "",
+      additionalUnits,
       createdBy: req.user.userId,
     });
 
@@ -300,6 +321,13 @@ exports.updateProduct = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Discount must be between 0 and 100",
+      });
+    }
+
+    if (updates.additionalUnits && !Array.isArray(updates.additionalUnits)) {
+      return res.status(400).json({
+        success: false,
+        message: "Additional units must be an array",
       });
     }
 

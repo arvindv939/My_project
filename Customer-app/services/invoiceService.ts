@@ -1,5 +1,7 @@
 import { formatIndianCurrency } from '@/utils/currency';
 import type { Order } from './orderService';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 class InvoiceService {
   async generateInvoice(order: Order, customerInfo: any): Promise<string> {
@@ -302,27 +304,23 @@ class InvoiceService {
 
   async shareInvoice(invoiceContent: string): Promise<void> {
     try {
-      // Create a data URL for the HTML content
-      const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(
-        invoiceContent
-      )}`;
+      // Write the HTML to a temporary file
+      const fileUri =
+        FileSystem.cacheDirectory + `GreenMart-Invoice-${Date.now()}.html`;
+      await FileSystem.writeAsStringAsync(fileUri, invoiceContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
 
-      // Create a temporary link element
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `GreenMart-Invoice-${Date.now()}.html`;
-
-      // Append to body, click, and remove
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      console.log('Invoice download initiated successfully');
+      // Use sharing dialog
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'text/html',
+        dialogTitle: 'Share or Save Invoice',
+      });
     } catch (error) {
       console.error('Error sharing invoice:', error);
       throw new Error('Failed to download invoice');
     }
   }
-}
 
-export const invoiceService = new InvoiceService();
+  invoiceService = new InvoiceService();
+}

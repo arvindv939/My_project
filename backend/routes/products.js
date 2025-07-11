@@ -16,6 +16,7 @@ router.get(
   roleMiddleware(["shop_owner", "ShopOwner"]),
   productController.getMyProducts
 );
+router.get("/by-shop/:shopId", productController.getProductsByShop);
 
 // Product CRUD operations (shop owner only)
 router.post(

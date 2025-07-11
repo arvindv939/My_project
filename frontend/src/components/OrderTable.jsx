@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-const OrderTable = ({ orders, handleOrderStatusUpdate }) => {
+const OrderTable = ({ orders }) => {
+  // ← Removed handleOrderStatusUpdate
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
 
@@ -10,7 +11,6 @@ const OrderTable = ({ orders, handleOrderStatusUpdate }) => {
     if (order.totalAmount && order.totalAmount > 0) {
       return order.totalAmount;
     }
-
     if (order.items && order.items.length > 0) {
       let total = 0;
       order.items.forEach((item) => {
@@ -20,7 +20,6 @@ const OrderTable = ({ orders, handleOrderStatusUpdate }) => {
       });
       return total;
     }
-
     return 0;
   };
 
@@ -64,10 +63,6 @@ const OrderTable = ({ orders, handleOrderStatusUpdate }) => {
   const handleViewOrder = (order) => {
     setSelectedOrder(order);
     setShowOrderModal(true);
-  };
-
-  const handleStatusChange = (orderId, newStatus) => {
-    handleOrderStatusUpdate(orderId, newStatus);
   };
 
   if (!orders || orders.length === 0) {
@@ -162,35 +157,32 @@ const OrderTable = ({ orders, handleOrderStatusUpdate }) => {
                 </span>
               </td>
               <td className="py-3 px-4">
-                <select
-                  value={order.status || "pending"}
-                  onChange={(e) =>
-                    handleStatusChange(order._id, e.target.value)
-                  }
-                  className={`px-2 py-1 rounded-full text-xs font-medium border-0 ${getStatusColor(
+                {/* Show as pill, no select/dropdown */}
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
                     order.status
                   )}`}
                 >
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="preparing">Preparing</option>
-                  <option value="ready">Ready</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+                  {order.status || "Pending"}
+                </span>
               </td>
               <td className="py-3 px-4">
                 <div>
                   <span
                     className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(
-                      "paid"
+                      order.paymentStatus
                     )}`}
                   >
-                    PAID
+                    {(order.paymentStatus || "Pending").toUpperCase()}
                   </span>
-                  <p className="text-xs text-gray-500 mt-1">via UPI</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {order.paymentMethod
+                      ? `via ${order.paymentMethod.toUpperCase()}`
+                      : ""}
+                  </p>
                 </div>
               </td>
+
               <td className="py-3 px-4">
                 <span className="text-sm text-gray-600">Completed</span>
               </td>
@@ -270,12 +262,15 @@ const OrderTable = ({ orders, handleOrderStatusUpdate }) => {
                         <span className="text-gray-600">Payment Status:</span>
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(
-                            "paid"
+                            selectedOrder.paymentStatus
                           )}`}
                         >
-                          PAID
+                          {(
+                            selectedOrder.paymentStatus || "Pending"
+                          ).toUpperCase()}
                         </span>
                       </div>
+
                       <div className="flex justify-between">
                         <span className="text-gray-600">Order Date:</span>
                         <span>
@@ -288,6 +283,26 @@ const OrderTable = ({ orders, handleOrderStatusUpdate }) => {
                       </div>
                     </div>
                   </div>
+                  {/* Show confirmation time if order is confirmed and has statusHistory */}
+                  {selectedOrder.status === "confirmed" &&
+                    selectedOrder.statusHistory && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Confirmed At:</span>
+                        <span>
+                          {(
+                            selectedOrder.statusHistory.find(
+                              (s) => s.status === "confirmed"
+                            ) || {}
+                          ).timestamp
+                            ? new Date(
+                                selectedOrder.statusHistory.find(
+                                  (s) => s.status === "confirmed"
+                                ).timestamp
+                              ).toLocaleString()
+                            : "N/A"}
+                        </span>
+                      </div>
+                    )}
 
                   {/* Customer Information */}
                   <div>

@@ -26,6 +26,7 @@ import { useCart } from '@/contexts/CartContext';
 import { productService, type Product } from '@/services/productService';
 import { formatIndianCurrency } from '@/utils/currency';
 import { QRScanner } from '@/components/QRScanner';
+import { useRouter } from 'expo-router';
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -33,6 +34,7 @@ export default function HomeScreen() {
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     fetchFeaturedProducts();
@@ -57,9 +59,27 @@ export default function HomeScreen() {
       console.log('QR Code scanned:', data);
       setShowQRScanner(false);
 
-      // Parse QR code data - expecting product ID or product URL
-      let productId = '';
+      // Try to parse as JSON first (for shop or product)
+      let parsed;
+      try {
+        parsed = JSON.parse(data);
+      } catch (e) {
+        parsed = null;
+      }
 
+      if (parsed && parsed.type === 'shop' && parsed.shopId) {
+        // Navigate to shop page
+        // Use your router, or navigation logic here
+        router.push(`/shop/${parsed.shopId}`);
+        return;
+      } else if (parsed && parsed.type === 'product' && parsed.productId) {
+        // Navigate to product page, or fetch details
+        router.push(`/product/${parsed.productId}`);
+        return;
+      }
+
+      // Existing product QR logic as fallback
+      let productId = '';
       if (data.includes('/product/')) {
         // Extract product ID from URL
         const urlParts = data.split('/product/');
@@ -70,7 +90,7 @@ export default function HomeScreen() {
       } else {
         Alert.alert(
           'Invalid QR Code',
-          'This QR code is not recognized as a product code.'
+          'This QR code is not recognized as a shop or product code.'
         );
         return;
       }
@@ -87,12 +107,12 @@ export default function HomeScreen() {
       const product = await productService.getProductById(productId);
 
       if (product) {
-        // Show product details and option to add to cart
+        // Show product details and option to add to cart (NO STOCK VISIBLE)
         Alert.alert(
           '🛍️ Product Found!',
           `${product.name}\nPrice: ${formatIndianCurrency(product.price)}/${
             product.unit
-          }\nStock: ${product.stock} available`,
+          }`,
           [
             {
               text: 'Cancel',
@@ -144,26 +164,6 @@ export default function HomeScreen() {
         unit: product.unit,
         quantity: 0,
       });
-
-      // Enhanced success notification
-      Alert.alert(
-        '✅ Added to Cart!',
-        `${product.name} has been added to your cart successfully.`,
-        [
-          {
-            text: 'Continue Shopping',
-            style: 'default',
-          },
-          {
-            text: 'View Cart',
-            style: 'default',
-            onPress: () => {
-              // Navigate to cart - you can implement navigation here
-              console.log('Navigate to cart');
-            },
-          },
-        ]
-      );
     } catch (error) {
       console.error('Error adding to cart:', error);
       Alert.alert('Error', 'Failed to add item to cart');
@@ -213,26 +213,6 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={[styles.statCard, { backgroundColor: '#FF6B35' }]}>
-            <Text style={styles.statNumber}>24</Text>
-            <Text style={styles.statLabel}>Items</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: '#E74C3C' }]}>
-            <Text style={styles.statNumber}>₹250</Text>
-            <Text style={styles.statLabel}>Saved</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: '#8E44AD' }]}>
-            <Text style={styles.statNumber}>500</Text>
-            <Text style={styles.statLabel}>Points</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: '#27AE60' }]}>
-            <Text style={styles.statNumber}>15.6kg</Text>
-            <Text style={styles.statLabel}>CO₂ Saved</Text>
-          </View>
-        </View>
-
         {/* QR Scanner Banner - Updated with green theme */}
         <View style={styles.qrScannerBanner}>
           <View style={styles.qrBannerContent}>
@@ -255,33 +235,6 @@ export default function HomeScreen() {
               <Text style={styles.qrScanButtonText}>Scan</Text>
             </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Quick Access */}
-        <Text style={styles.sectionTitle}>Quick Access</Text>
-        <View style={styles.quickAccessContainer}>
-          <TouchableOpacity style={styles.quickAccessCard}>
-            <Clock size={24} color="#27AE60" />
-            <Text style={styles.quickAccessTitle}>Store Hours</Text>
-            <Text style={styles.quickAccessSubtitle}>9 AM - 9 PM</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickAccessCard}>
-            <View style={styles.quickAccessIcon}>
-              <Text style={styles.quickAccessEmoji}>📋</Text>
-            </View>
-            <Text style={styles.quickAccessTitle}>My Orders</Text>
-            <Text style={styles.quickAccessSubtitle}>Track orders</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickAccessCard}>
-            <ShoppingCart size={24} color="#3498DB" />
-            <Text style={styles.quickAccessTitle}>Cart</Text>
-            <Text style={styles.quickAccessSubtitle}>View items</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickAccessCard}>
-            <MapPin size={24} color="#E74C3C" />
-            <Text style={styles.quickAccessTitle}>Locations</Text>
-            <Text style={styles.quickAccessSubtitle}>Find stores</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Featured Products */}
@@ -327,7 +280,6 @@ export default function HomeScreen() {
                     </Text>
                     <Text style={styles.productUnit}>/{product.unit}</Text>
                   </View>
-                  <Text style={styles.stockInfo}>Stock: {product.stock}</Text>
                   <TouchableOpacity
                     style={[
                       styles.addButton,
@@ -349,8 +301,7 @@ export default function HomeScreen() {
         {/* Impact Section */}
         <View style={styles.impactSection}>
           <Text style={styles.impactTitle}>🌱Aravind (Pes Univeristy)</Text>
-          <View style={styles.impactStats}>
-          </View>
+          <View style={styles.impactStats}></View>
         </View>
       </ScrollView>
 

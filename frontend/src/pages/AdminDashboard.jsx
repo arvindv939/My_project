@@ -551,54 +551,6 @@ function AdminDashboard() {
         <div className="transition-opacity duration-300">
           {activeTab === "overview" && (
             <div className="space-y-8">
-              {/* Revenue Chart */}
-              <div
-                className="bg-white rounded-2xl p-6"
-                style={{
-                  boxShadow:
-                    "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                }}
-              >
-                <h3 className="text-xl font-bold mb-4 text-gray-800">
-                  Revenue Overview
-                </h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={analytics.monthlyData}>
-                    <defs>
-                      <linearGradient
-                        id="colorRevenue"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#8884d8"
-                          stopOpacity={0.8}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#8884d8"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="_id" />
-                    <YAxis />
-                    <Tooltip />
-                    <Area
-                      type="monotone"
-                      dataKey="totalRevenue"
-                      stroke="#8884d8"
-                      fillOpacity={1}
-                      fill="url(#colorRevenue)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Category Analysis */}
                 <div
@@ -886,10 +838,7 @@ function AdminDashboard() {
               <h3 className="text-xl font-bold mb-4 text-gray-800">
                 Order Management
               </h3>
-              <OrderTable
-                orders={orders}
-                handleOrderStatusUpdate={handleOrderStatusUpdate}
-              />
+              <OrderTable orders={orders} />
             </div>
           )}
 

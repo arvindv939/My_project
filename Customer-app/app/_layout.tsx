@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +13,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
-import { timingService } from '@/services/timingService'; // ✅ Import timingService
+import { WishlistProvider } from '@/contexts/WishlistContext';
+import { timingService } from '@/services/timingService';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -29,7 +32,6 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
 
-    // ✅ Initialize the timing service on app start
     timingService.init();
   }, [fontsLoaded, fontError]);
 
@@ -40,12 +42,14 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <CartProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
+        <WishlistProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(auth)" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar style="auto" />
+        </WishlistProvider>
       </CartProvider>
     </AuthProvider>
   );

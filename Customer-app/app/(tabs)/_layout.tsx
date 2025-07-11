@@ -1,45 +1,73 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, ShoppingBag, ShoppingCart, Package, User } from 'lucide-react-native';
-import { useAuth } from '@/contexts/AuthContext';
-import { useCart } from '@/contexts/CartContext';
 import { View, Text, StyleSheet } from 'react-native';
+import {
+  Home,
+  Grid3X3,
+  ShoppingCart,
+  Heart,
+  QrCode,
+  ClipboardList,
+  User,
+} from 'lucide-react-native';
+import { useCart } from '@/contexts/CartContext';
+import { useWishlist } from '@/contexts/WishlistContext';
+
+function TabBarIcon({
+  Icon,
+  color,
+  focused,
+  badge,
+}: {
+  Icon: any;
+  color: string;
+  focused: boolean;
+  badge?: number;
+}) {
+  return (
+    <View style={styles.iconContainer}>
+      <Icon size={24} color={color} fill={focused ? color : 'transparent'} />
+      {badge && badge > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {badge > 99 ? '99+' : badge.toString()}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function TabLayout() {
-  const { user } = useAuth();
-  const { getItemCount } = useCart();
-  const cartItemsCount = getItemCount();
-
-  // Redirect to auth if not logged in
-  if (!user) {
-    return null; // This will be handled by the navigation logic
-  }
+  const { items: cartItems } = useCart();
+  const { items: wishlistItems } = useWishlist();
 
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#16A34A',
+        tabBarActiveTintColor: '#27AE60',
         tabBarInactiveTintColor: '#6B7280',
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: '#ffffff',
-          borderTopColor: '#E5E7EB',
           borderTopWidth: 1,
-          paddingTop: 8,
+          borderTopColor: '#E5E7EB',
           paddingBottom: 8,
-          height: 80,
+          paddingTop: 8,
+          height: 70,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontFamily: 'Inter-SemiBold',
+          fontWeight: '600',
           marginTop: 4,
         },
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ size, color }) => (
-            <Home size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon Icon={Home} color={color} focused={focused} />
           ),
         }}
       />
@@ -47,8 +75,17 @@ export default function TabLayout() {
         name="categories"
         options={{
           title: 'Categories',
-          tabBarIcon: ({ size, color }) => (
-            <ShoppingBag size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon Icon={Grid3X3} color={color} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="scan-shop"
+        options={{
+          title: 'Scan Shop',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon Icon={QrCode} color={color} focused={focused} />
           ),
         }}
       />
@@ -56,17 +93,27 @@ export default function TabLayout() {
         name="cart"
         options={{
           title: 'Cart',
-          tabBarIcon: ({ size, color }) => (
-            <View style={styles.cartIconContainer}>
-              <ShoppingCart size={size} color={color} />
-              {cartItemsCount > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>
-                    {cartItemsCount > 99 ? '99+' : cartItemsCount}
-                  </Text>
-                </View>
-              )}
-            </View>
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              Icon={ShoppingCart}
+              color={color}
+              focused={focused}
+              badge={cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="wishlist"
+        options={{
+          title: 'Wishlist',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              Icon={Heart}
+              color={color}
+              focused={focused}
+              badge={wishlistItems.length}
+            />
           ),
         }}
       />
@@ -74,8 +121,8 @@ export default function TabLayout() {
         name="orders"
         options={{
           title: 'Orders',
-          tabBarIcon: ({ size, color }) => (
-            <Package size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon Icon={ClipboardList} color={color} focused={focused} />
           ),
         }}
       />
@@ -83,8 +130,8 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ size, color }) => (
-            <User size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon Icon={User} color={color} focused={focused} />
           ),
         }}
       />
@@ -93,24 +140,26 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  cartIconContainer: {
+  iconContainer: {
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cartBadge: {
+  badge: {
     position: 'absolute',
     top: -8,
-    right: -10,
-    backgroundColor: '#EF4444',
+    right: -12,
+    backgroundColor: '#E74C3C',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  cartBadgeText: {
+  badgeText: {
     color: '#ffffff',
     fontSize: 10,
-    fontFamily: 'Inter-Bold',
+    fontWeight: 'bold',
   },
 });

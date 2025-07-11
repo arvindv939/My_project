@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import {
   View,
@@ -10,6 +9,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  FlatList,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Leaf } from 'lucide-react-native';
@@ -20,19 +21,7 @@ import {
   type Product,
   type ProductFilters,
 } from '@/services/productService';
-
-const categories = [
-  { id: 'Fruits', name: 'Fresh Fruits', icon: '🍎', color: '#EF4444' },
-  { id: 'Vegetables', name: 'Vegetables', icon: '🥬', color: '#10B981' },
-  { id: 'Dairy', name: 'Dairy & Eggs', icon: '🥛', color: '#27AE60' },
-  { id: 'Bakery', name: 'Bakery', icon: '🍞', color: '#F59E0B' },
-  { id: 'Snacks', name: 'Snacks', icon: '🍿', color: '#16A34A' },
-  { id: 'Beverages', name: 'Beverages', icon: '🧃', color: '#2ECC71' },
-  { id: 'Staples', name: 'Staples', icon: '🌾', color: '#F59E0B' },
-  { id: 'Household', name: 'Household', icon: '🧽', color: '#6B7280' },
-  { id: 'Personal Care', name: 'Personal Care', icon: '🧴', color: '#EC4899' },
-  { id: 'Others', name: 'Others', icon: '📦', color: '#64748B' },
-];
+import { useRouter } from 'expo-router';
 
 export default function CategoriesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,10 +30,49 @@ export default function CategoriesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState<ProductFilters>({});
+  const router = useRouter();
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(
+    null
+  );
+
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   useEffect(() => {
     fetchProducts();
   }, [selectedCategory, filters]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      // Replace this with your actual API call!
+      // For example, using productService or fetch:
+      // const response = await fetch('http://localhost:5000/api/categories');
+      // const data = await response.json();
+      const data = await productService.getAllCategories(); // If your service provides this
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  const onChangeSearch = (text: string) => {
+    setSearchQuery(text);
+
+    if (searchTimeout) clearTimeout(searchTimeout);
+
+    const timeout = setTimeout(() => {
+      handleSearch();
+    }, 500); // 500ms debounce
+
+    setSearchTimeout(timeout);
+  };
 
   const fetchProducts = async () => {
     try {
@@ -94,6 +122,19 @@ export default function CategoriesScreen() {
     }
   };
 
+  const renderCategory = ({ item }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => router.push(`/products?category=${item.name}`)}
+    >
+      <Image
+        source={{ uri: item.imageUrl || 'https://via.placeholder.com/80' }}
+        style={styles.image}
+      />
+      <Text style={styles.name}>{item.name}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -114,7 +155,7 @@ export default function CategoriesScreen() {
               placeholder="Search products..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={onChangeSearch}
               onSubmitEditing={handleSearch}
               returnKeyType="search"
             />
@@ -133,54 +174,17 @@ export default function CategoriesScreen() {
       {/* Categories */}
       <View style={styles.categoriesSection}>
         <Text style={styles.sectionTitle}>Categories</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesScroll}
-        >
-          <TouchableOpacity
-            style={[
-              styles.categoryCard,
-              !selectedCategory && styles.categoryCardActive,
-            ]}
-            onPress={() => setSelectedCategory(null)}
-          >
-            <Text style={styles.categoryIcon}>🛒</Text>
-            <Text
-              style={[
-                styles.categoryName,
-                !selectedCategory && styles.categoryNameActive,
-              ]}
-            >
-              All Products
-            </Text>
-          </TouchableOpacity>
-
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryCard,
-                selectedCategory === category.id && styles.categoryCardActive,
-              ]}
-              onPress={() =>
-                setSelectedCategory(
-                  selectedCategory === category.id ? null : category.id
-                )
-              }
-            >
-              <Text style={styles.categoryIcon}>{category.icon}</Text>
-              <Text
-                style={[
-                  styles.categoryName,
-                  selectedCategory === category.id && styles.categoryNameActive,
-                ]}
-              >
-                {category.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {categoriesLoading ? (
+          <ActivityIndicator color="#27AE60" />
+        ) : (
+          <FlatList
+            data={categories}
+            renderItem={renderCategory}
+            keyExtractor={(item) => item._id || item.name}
+            numColumns={2}
+            contentContainerStyle={styles.categoriesScroll}
+          />
+        )}
       </View>
 
       {/* Products Grid */}
@@ -313,33 +317,30 @@ const styles = StyleSheet.create({
   categoriesScroll: {
     paddingHorizontal: 20,
   },
-  categoryCard: {
+  card: {
+    flex: 1,
+    margin: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 15,
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    marginRight: 12,
-    minWidth: 80,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  categoryCardActive: {
-    backgroundColor: '#D1FAE5',
-    borderColor: '#27AE60',
+  image: {
+    width: 80,
+    height: 80,
+    marginBottom: 10,
   },
-  categoryIcon: {
-    fontSize: 24,
-    marginBottom: 8,
-  },
-  categoryName: {
-    fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
-    color: '#6B7280',
+  name: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#495057',
     textAlign: 'center',
-  },
-  categoryNameActive: {
-    color: '#27AE60',
   },
   productsContainer: {
     flex: 1,

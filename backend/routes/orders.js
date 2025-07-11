@@ -309,6 +309,12 @@ router.put("/:id/payment", authMiddleware, async (req, res) => {
     order.paymentStatus = paymentStatus || order.paymentStatus;
 
     await order.save();
+    console.log("Payment update success:", {
+      orderId: order._id,
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
+    });
+
     res.json({ success: true, message: "Payment updated", order });
   } catch (error) {
     console.error("Payment update error:", error);

@@ -134,7 +134,7 @@ export default function OrdersScreen() {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const fetchedOrders = await orderService.getOrders(token);
+      const fetchedOrders = await orderService.getCustomerOrders(token);
       setOrders(fetchedOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -395,7 +395,7 @@ export default function OrdersScreen() {
   const handlePayment = async (orderId: string, method: string) => {
     try {
       const res = await fetch(
-        `http://localhost:5000/api/orders/${orderId}/payment`,
+        `http://192.168.1.12:5000/api/orders/${orderId}/payment`,
         {
           method: 'PUT',
           headers: {
@@ -409,6 +409,7 @@ export default function OrdersScreen() {
         }
       );
       const data = await res.json();
+      console.log('Payment response:', data);
       if (data.success) {
         Alert.alert('✅ Success', `Paid via ${method.toUpperCase()}`);
         fetchOrders();

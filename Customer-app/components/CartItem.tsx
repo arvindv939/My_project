@@ -1,56 +1,68 @@
-import { View, Text, Image, TouchableOpacity, StyleSheet, Alert } from "react-native"
-import { Minus, Plus, Trash2 } from "lucide-react-native"
-import { useCart } from "@/contexts/CartContext"
-import { formatIndianCurrency } from "@/utils/currency"
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Button,
+} from 'react-native';
+import { Minus, Plus, Trash2 } from 'lucide-react-native';
+import { useCart } from '@/contexts/CartContext';
+import { formatIndianCurrency } from '@/utils/currency';
+import AutoReorderModal from './AutoReorderModal';
 
 interface CartItemProps {
   item: {
-    id: string
-    name: string
-    price: number
-    image: string
-    quantity: number
-    unit?: string
-  }
+    id: string;
+    name: string;
+    price: number;
+    image: string;
+    quantity: number;
+    unit?: string;
+  };
 }
 
-
 export function CartItem({ item }: CartItemProps) {
-  const { updateQuantity, removeFromCart } = useCart()
+  const { updateQuantity, removeFromCart } = useCart();
+  const [showAutoModal, setShowAutoModal] = useState(false);
 
   const handleIncrement = () => {
-    updateQuantity(item.id, item.quantity + 1)
-  }
+    updateQuantity(item.id, item.quantity + 1);
+  };
 
   const handleDecrement = () => {
     if (item.quantity > 1) {
-      updateQuantity(item.id, item.quantity - 1)
+      updateQuantity(item.id, item.quantity - 1);
     } else {
-      handleRemove()
+      handleRemove();
     }
-  }
+  };
 
   const handleRemove = () => {
-    Alert.alert("Remove Item", `Remove ${item.name} from cart?`, [
+    Alert.alert('Remove Item', `Remove ${item.name} from cart?`, [
       {
-        text: "Cancel",
-        style: "cancel",
+        text: 'Cancel',
+        style: 'cancel',
       },
       {
-        text: "Remove",
-        style: "destructive",
+        text: 'Remove',
+        style: 'destructive',
         onPress: () => removeFromCart(item.id),
       },
-    ])
-  }
+    ]);
+  };
 
-  const totalPrice = item.price * item.quantity
+  const totalPrice = item.price * item.quantity;
 
   return (
     <View style={styles.container}>
       <Image
         source={{
-          uri: item.image || "https://images.unsplash.com/photo-1542838132-92c53300491e?w=300&h=300&fit=crop",
+          uri:
+            item.image ||
+            'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300&h=300&fit=crop',
         }}
         style={styles.image}
         resizeMode="cover"
@@ -75,32 +87,61 @@ export function CartItem({ item }: CartItemProps) {
 
         <View style={styles.footer}>
           <View style={styles.quantityContainer}>
-            <TouchableOpacity onPress={handleDecrement} style={[styles.quantityButton, styles.decrementButton]}>
+            <TouchableOpacity
+              onPress={handleDecrement}
+              style={[styles.quantityButton, styles.decrementButton]}
+            >
               <Minus size={16} color="#16A34A" />
             </TouchableOpacity>
 
             <Text style={styles.quantity}>{item.quantity}</Text>
 
-            <TouchableOpacity onPress={handleIncrement} style={[styles.quantityButton, styles.incrementButton]}>
+            <TouchableOpacity
+              onPress={handleIncrement}
+              style={[styles.quantityButton, styles.incrementButton]}
+            >
               <Plus size={16} color="#16A34A" />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.totalPrice}>{formatIndianCurrency(totalPrice)}</Text>
+          <Text style={styles.totalPrice}>
+            {formatIndianCurrency(totalPrice)}
+          </Text>
         </View>
+
+        {/* Auto reorder button/modal here */}
+        <View style={{ marginTop: 10 }}>
+          <Button
+            title="Set Auto Reorder"
+            color="#16A34A"
+            onPress={() => setShowAutoModal(true)}
+          />
+        </View>
+        <AutoReorderModal
+          visible={showAutoModal}
+          onClose={() => setShowAutoModal(false)}
+          orderTemplate={{
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            unit: item.unit,
+            image: item.image,
+          }}
+        />
       </View>
     </View>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    backgroundColor: "#ffffff",
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
@@ -113,24 +154,24 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 8,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: '#F3F4F6',
   },
   content: {
     flex: 1,
     marginLeft: 12,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 4,
   },
   name: {
     flex: 1,
     fontSize: 16,
-    fontWeight: "600",
-    color: "#1F2937",
-    textTransform: "capitalize",
+    fontWeight: '600',
+    color: '#1F2937',
+    textTransform: 'capitalize',
     marginRight: 8,
   },
   removeButton: {
@@ -141,24 +182,24 @@ const styles = StyleSheet.create({
   },
   unitPrice: {
     fontSize: 14,
-    color: "#6B7280",
+    color: '#6B7280',
   },
   unit: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: '#9CA3AF',
   },
   footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   quantityContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F0FDF4",
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#BBF7D0",
+    borderColor: '#BBF7D0',
   },
   quantityButton: {
     padding: 8,
@@ -174,15 +215,15 @@ const styles = StyleSheet.create({
   },
   quantity: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#16A34A",
+    fontWeight: '600',
+    color: '#16A34A',
     marginHorizontal: 12,
     minWidth: 20,
-    textAlign: "center",
+    textAlign: 'center',
   },
   totalPrice: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#16A34A",
+    fontWeight: 'bold',
+    color: '#16A34A',
   },
-})
+});

@@ -10,6 +10,7 @@ const roleMiddleware = require("../middlewares/roleMiddleware");
 router.get("/", productController.getProducts);
 router.get("/search", productController.searchProducts);
 router.get("/category/:category", productController.getProductsByCategory);
+router.get("/by-shop/:shopId", productController.getProductsByShop);
 
 // Get products for shop owner - MUST come before /:id route
 router.get(

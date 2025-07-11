@@ -16,33 +16,26 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, "Category is required"],
-      enum: [
-        "Vegetables",
-        "Fruits",
-        "Dairy",
-        "Bakery",
-        "Snacks",
-        "Beverages",
-        "Staples",
-        "Household",
-        "Personal Care",
-        "Others",
-      ],
+      enum: ["Vegetables", "Fruits", "Dairy", "Bakery", "Staples", "Others"],
     },
     unit: {
       type: String,
-      required: [true, "Unit is required"],
-      enum: [
-        "Kg",
-        "Grams",
-        "Litres",
-        "Millilitres",
-        "Units",
-        "Packets",
-        "Pieces",
-        "Dozen",
-      ],
+      required: [true, "Primary unit is required"],
     },
+    additionalUnits: [
+      {
+        unit: {
+          type: String,
+          required: true,
+        },
+        price: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+      },
+    ],
+
     price: {
       type: Number,
       required: [true, "Price is required"],
